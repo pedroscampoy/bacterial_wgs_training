@@ -33,14 +33,14 @@ From: centos:latest
     scif install /opt/bwa_v0.7.17_centos7.scif && \
     echo "Installing chewbbaca app" && \
     scif install /opt/chewbbaca_v2.0.5_centos7.scif && \
-    echo "Installing outbreaker app" && \
-    scif install /opt/outbreaker_v1.0_centos7.scif && \
+    #echo "Installing outbreaker app" && \
+    #scif install /opt/outbreaker_v1.0_centos7.scif && \
     echo "Installing get_homologues app" && \
     scif install /opt/gethomologues_v3.1.4_centos7.scif && \
     echo "Installing srst2 app" && \
     scif install /opt/srst2_v0.2.0_centos7.scif && \
     echo "Installing plasmidID app" && \
-    scif install /opt/plasmidid_v1.4.0_centos7.scif
+    scif install /opt/plasmidid_v1.4.1_centos7.scif
 
 
 # Executables must be exported for nextflow, if you use their singularity native integration.
