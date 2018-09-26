@@ -159,7 +159,7 @@ if( params.bwa_index ){
 Channel
     .fromFilePairs( params.reads, size: params.singleEnd ? 1 : 2 )
     .ifEmpty { exit 1, "Cannot find any reads matching: ${params.reads}\nIf this is single-end data, please specify --singleEnd on the command line." }
-    .into { raw_reads_fastqc; raw_reads_trimgalore }
+    .into { raw_reads_fastqc; raw_reads_trimming }
 
 
 // Header log info
@@ -217,7 +217,7 @@ try {
  */
 if(!params.bwa_index && fasta_file){
     process makeBWAindex {
-        tag fasta_file
+        tag "${fasta.baseName}"
         publishDir path: { params.saveReference ? "${params.outdir}/reference_genome" : params.outdir },
                    saveAs: { params.saveReference ? it : null }, mode: 'copy'
 
@@ -257,38 +257,33 @@ process fastqc {
     """
 }
 
-
-/*
- * STEP 1.2 - Trimmomatic
-if(params.notrim){
-    trimmed_reads = read_files_trimming
-    trimgalore_results = []
-    trimgalore_fastqc_reports = []
-} else {
-	process trimming {
-		tag "$name"
-
-		input:
-		set val(name), file(reads) from raw_reads
-
-		output:
-		file '*_paired.fastq.gz' into trimmed_paired_reads
-		file '*_unpaired.fastq.gz' into trimmed_unpaired_reads
-
-		script:
-		'''
-		echo "Step 1.2 - Trimming files ${reads}"
-
-		echo "Command is: trimmomatic PE -threads 10 -phred33 $reads $name_R1_paired.fastq $name_R1_unpaired.fastq $name_R2_paired.fastq $name_R2_unpaired.fastq ILLUMINACLIP:$trimmomatic_path/adapters/NexteraPE-PE.fa:2:30:10 SLIDINGWINDOW:4:20 MINLEN:50"
-
-		trimmomatic PE -threads 10 -phred33 $reads $name_R1_paired.fastq $name_R1_unpaired.fastq $name_R2_paired.fastq $name_R2_unpaired.fastq ILLUMINACLIP:$trimmomatic_path/adapters/NexteraPE-PE.fa:2:30:10 SLIDINGWINDOW:4:20 MINLEN:50 2>&1 >> $lablog
-
-		gzip *.fastq
-
-		echo "Step 1.2 - Complete!" >> $lablog
-		echo "-------------------------------------------------" >> $lablog
-		'''
+process trimming {
+	tag "$name"
+	publishDir "${params.outdir}/trimming", mode: 'copy',
+		saveAs: {filename ->
+			if (filename.indexOf("_fastqc") > 0) "FastQC/$filename"
+			else if (filename.indexOf("trimming_log") > 0) "logs/$filename"
+			else params.saveTrimmed ? filename : null
 	}
+
+	input:
+	set val(name), file(reads) from raw_reads_trimming
+
+	output:
+	file '*_paired.fastq.gz' into trimmed_paired_reads
+	file '*_unpaired.fastq.gz' into trimmed_unpaired_reads
+	file '*_fastqc.{zip,html}' into trimming_fastqc_reports
+	file 'trimming.log' into trimmomatic_results
+
+	script:
+	"""
+	trimmomatic PE -threads 10 -phred33 $reads $name"_R1_paired.fastq" $name"_R1_unpaired.fastq" $name"_R2_paired.fastq" $name"_R2_unpaired.fastq" ILLUMINACLIP:$trimmomatic_path/adapters/NexteraPE-PE.fa:2:30:10 SLIDINGWINDOW:4:20 MINLEN:50 2>&1 > trimming.log
+
+	gzip *.fastq
+
+	fastqc -q *_paired.fastq.gz
+
+	"""
 }
 
 
