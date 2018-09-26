@@ -116,36 +116,14 @@ if( params.gtf ){
     if( !gtf.exists() ) exit 1, "GTF file not found: ${params.gtf}."
 }
 
-// blacklist file
-params.blacklist_filtering = false
-params.blacklist = params.genome ? params.genomes[ params.genome ].blacklist ?: false : false
-
-if ( params.blacklist_filtering ){
-    blacklist = file(params.blacklist)
-    if( !blacklist.exists() ) exit 1, "Blacklist file not found: ${params.blacklist}"
-}
-
-// genome effective size == % genome mappability
-params.geffective = false
-params.mfold = false
-
-// PeakCallers
-params.peakCaller = "macs"
+// Steps
+params.step = "preprocessing"
 
 // Mapping-duplicates defaults
 params.keepduplicates = false
-params.allow_multi_align = false
 params.notrim = false
 
-// Rlibrarylocation
-params.rlocation = false
 
-if (params.rlocation){
-    nxtflow_libs = file(params.rlocation)
-    nxtflow_libs.mkdirs()
-}
-
-// Following two configured in config.file?
 // MultiQC config file
 params.multiqc_config = "${baseDir}/conf/multiqc_config.yaml"
 
@@ -153,74 +131,28 @@ if (params.multiqc_config){
 	multiqc_config = file(params.multiqc_config)
 }
 
-// UROPA config
-params.uropa_config = "$baseDir/conf/uropa.json"
-
-if (params.uropa_config){
-	uropa_config = file(params.uropa_config)
-}
-
 // Output md template location
 output_docs = file("$baseDir/docs/output.md")
+
 // Output files options
 params.saveReference = false
 params.saveTrimmed = false
 params.saveAlignedIntermediates = false
 
 // Default trimming options
+trimmomatic_path = "/scif/apps/trimmomatic/Trimmomatic-0.38"
 params.clip_r1 = 0
 params.clip_r2 = 0
 params.three_prime_clip_r1 = 0
 params.three_prime_clip_r2 = 0
 
-// deepTools default Options
-params.extendReadsLen = 100
-
-// macsconfig file
-macsconfig = file(params.macsconfig)
-params.saturation = false
-params.broad = false
-
 // SingleEnd option
 params.singleEnd = false
-
-// qvalue
-params.qvalue = false
-
-// pvalue
-params.pvalue = 0.05
-
-// Macs no model and extsize
-params.macsnomodel = false
-params.extsize = false
-extsize = params.extsize
-if (params.macsnomodel){
-	if (!params.extsize) exit 1, "Missing extsize, mandatory when macs --nomodel parameter is specified. Use --extsize."
-}
-// Default no chromsizes because no epic_para
-params.chromsizes = false
-
 
 // Validate  mandatory inputs
 //Check macsconfig exists
 if( !macsconfig.exists() ) exit 1, "Missing MACS config: '$macsconfig'. Specify path with --macsconfig"
 
-// Check a config reference genome or a fasta/gtf/geffective is supplied.
-def REF_macs = false
-def REF_ngsplot = false
-if (params.genome == 'GRCh37'){ REF_macs = 'hs'; REF_ngsplot = 'hg19' }
-else if (params.genome == 'GRCm38'){ REF_macs = 'mm'; REF_ngsplot = 'mm10' }
-else if (params.genome == 'StrepPneumo1'){ REF_ngsplot = 'StrepPneumo1' }
-else if (params.fasta != false & params.geffective != false & params.gtf != false){
-    REF_macs= params.geffective
-    log.warn "NGSplot is only available for hg19 and mm10 genomes at the moment."
-} else {
-    log.warn "Reference '${params.genome}' not supported by MACS, ngs_plot and annotation (only GRCh37, GRCm38 and StrepPneumo1). Fasta file (--fasta), genome effective size (--geffective) and gtp annotation file (--gtf) must be supplied."
-}
-
-if (params.peakCaller =~ '/(all|epic)/') {
-	if (!params.chromsizes) {exit 1, "Missing --chromsizes: mandatory when all or epic peakCallers are selected "}
-}
 
 /*
  * Create channel for input files
@@ -239,47 +171,19 @@ Channel
     .ifEmpty { exit 1, "Cannot find any reads matching: ${params.reads}\nIf this is single-end data, please specify --singleEnd on the command line." }
     .into { raw_reads_fastqc; raw_reads_trimgalore }
 
-//Create a channel for macs config file
-Channel
-    .from(macsconfig.readLines())
-    .map { line ->
-        list = line.split(',')
-        chip_sample_id = list[0]
-        ctrl_sample_id = list[1]
-        analysis_id = list[2]
-        [ chip_sample_id, ctrl_sample_id, analysis_id ]
-    }
-    .into{ macs_para; saturation_para;epic_para }
-
-
-// Create channel for bwa_index if supplied
-if( params.chromsizes ){
-    chromsizes_epic = Channel
-        .fromPath(params.chromsizes)
-        .ifEmpty { exit 1, "Chromsizes not found: ${params.chromsizes}" }
-}
 
 // Header log info
 log.info "========================================="
 log.info " nf-core/ChIPseq: ChIP-Seq Best Practice v${version}"
 log.info "========================================="
 def summary = [:]
-summary['Run Name']            = custom_runName ?: workflow.runName
 summary['Reads']               = params.reads
 summary['Data Type']           = params.singleEnd ? 'Single-End' : 'Paired-End'
-summary['Genome']              = params.genome
 if(params.bwa_index)  summary['BWA Index'] = params.bwa_index
 else if(params.fasta) summary['Fasta Ref'] = params.fasta
 if(params.gtf)  summary['GTF File'] = params.gtf
-summary['Multiple alignments allowed']     = params.allow_multi_align
 summary['Keep Duplicates']     = params.keepduplicates
-summary['Peak Caller']         = params.peakCaller
-summary['Cntr/sample Config']         = params.macsconfig
-summary['Saturation analysis'] = params.saturation
-summary['MACS broad peaks']    = params.broad
-summary['Blacklist filtering'] = params.blacklist_filtering
-if( params.blacklist_filtering ) summary['Blacklist BED'] = params.blacklist
-summary['Extend Reads']        = "$params.extendReadsLen bp"
+summary['Step']         = params.peakCaller
 summary['Container']           = workflow.container
 if(workflow.revision) summary['Pipeline Release'] = workflow.revision
 summary['Current home']        = "$HOME"
@@ -287,7 +191,6 @@ summary['Current user']        = "$USER"
 summary['Current path']        = "$PWD"
 summary['Working dir']         = workflow.workDir
 summary['Output dir']          = params.outdir
-summary['R libraries']         = params.rlocation
 summary['Script dir']          = workflow.projectDir
 summary['Save Reference']      = params.saveReference
 summary['Save Trimmed']        = params.saveTrimmed
@@ -301,9 +204,6 @@ if( params.notrim ){
     summary["Trim 3' R2"] = params.three_prime_clip_r2
 }
 summary['Config Profile'] = workflow.profile
-if(params.project) summary['UPPMAX Project'] = params.project
-if(params.email) summary['E-mail Address'] = params.email
-if(workflow.commitId) summary['Pipeline Commit']= workflow.commitId
 log.info summary.collect { k,v -> "${k.padRight(21)}: $v" }.join("\n")
 log.info "===================================="
 
@@ -321,20 +221,6 @@ try {
               "  Please run `nextflow self-update` to update Nextflow.\n" +
               "============================================================"
 }
-
-// Show a big error message if we're running on the base config and an uppmax cluster
-if( workflow.profile == 'standard'){
-    if ( "hostname".execute().text.contains('.uppmax.uu.se') ) {
-        log.error "====================================================\n" +
-                  "  WARNING! You are running with the default 'standard'\n" +
-                  "  pipeline config profile, which runs on the head node\n" +
-                  "  and assumes all software is on the PATH.\n" +
-                  "  ALL JOBS ARE RUNNING LOCALLY and stuff will probably break.\n" +
-                  "  Please use `-profile uppmax` to run on UPPMAX clusters.\n" +
-                  "============================================================"
-    }
-}
-
 
 /*
  * PREPROCESSING - Build BWA index
@@ -361,7 +247,7 @@ if(!params.bwa_index && fasta_file){
 
 
 /*
- * STEP 1 - FastQC
+ * STEP 1.1 - FastQC
  */
 process fastqc {
     tag "$name"
@@ -383,45 +269,36 @@ process fastqc {
 
 
 /*
- * STEP 2 - Trim Galore!
- */
+ * STEP 1.2 - Trimmomatic
 if(params.notrim){
     trimmed_reads = read_files_trimming
     trimgalore_results = []
     trimgalore_fastqc_reports = []
 } else {
-    process trim_galore {
-        tag "$name"
-        publishDir "${params.outdir}/trim_galore", mode: 'copy',
-            saveAs: {filename ->
-                if (filename.indexOf("_fastqc") > 0) "FastQC/$filename"
-                else if (filename.indexOf("trimming_report.txt") > 0) "logs/$filename"
-                else params.saveTrimmed ? filename : null
-            }
+	process trimming {
+		tag "$name"
 
-        input:
-        set val(name), file(reads) from raw_reads_trimgalore
+		input:
+		set val(name), file(reads) from raw_reads
 
-        output:
-        file '*.fq.gz' into trimmed_reads
-        file '*trimming_report.txt' into trimgalore_results
-        file "*_fastqc.{zip,html}" into trimgalore_fastqc_reports
+		output:
+		file '*_paired.fastq.gz' into trimmed_paired_reads
+		file '*_unpaired.fastq.gz' into trimmed_unpaired_reads
 
-        script:
-        c_r1 = params.clip_r1 > 0 ? "--clip_r1 ${params.clip_r1}" : ''
-        c_r2 = params.clip_r2 > 0 ? "--clip_r2 ${params.clip_r2}" : ''
-        tpc_r1 = params.three_prime_clip_r1 > 0 ? "--three_prime_clip_r1 ${params.three_prime_clip_r1}" : ''
-        tpc_r2 = params.three_prime_clip_r2 > 0 ? "--three_prime_clip_r2 ${params.three_prime_clip_r2}" : ''
-        if (params.singleEnd) {
-            """
-            trim_galore --fastqc --gzip $c_r1 $tpc_r1 $reads
-            """
-        } else {
-            """
-            trim_galore --paired --fastqc --gzip $c_r1 $c_r2 $tpc_r1 $tpc_r2 $reads
-            """
-        }
-    }
+		script:
+		'''
+		echo "Step 1.2 - Trimming files ${reads}"
+
+		echo "Command is: trimmomatic PE -threads 10 -phred33 $reads $name_R1_paired.fastq $name_R1_unpaired.fastq $name_R2_paired.fastq $name_R2_unpaired.fastq ILLUMINACLIP:$trimmomatic_path/adapters/NexteraPE-PE.fa:2:30:10 SLIDINGWINDOW:4:20 MINLEN:50"
+
+		trimmomatic PE -threads 10 -phred33 $reads $name_R1_paired.fastq $name_R1_unpaired.fastq $name_R2_paired.fastq $name_R2_unpaired.fastq ILLUMINACLIP:$trimmomatic_path/adapters/NexteraPE-PE.fa:2:30:10 SLIDINGWINDOW:4:20 MINLEN:50 2>&1 >> $lablog
+
+		gzip *.fastq
+
+		echo "Step 1.2 - Complete!" >> $lablog
+		echo "-------------------------------------------------" >> $lablog
+		'''
+	}
 }
 
 
@@ -434,7 +311,7 @@ process bwa {
                saveAs: {filename -> params.saveAlignedIntermediates ? filename : null }
 
     input:
-    file reads from trimmed_reads
+    file reads from trimmed_paired_reads
     file index from bwa_index
     file fasta from fasta_file
 
@@ -453,7 +330,7 @@ process bwa {
 /*
  * STEP 3.2 - post-alignment processing
  */
-
+/*
 process samtools {
     tag "${bam.baseName}"
     publishDir path: "${params.outdir}/bwa", mode: 'copy',
@@ -509,7 +386,7 @@ process bwa_mapped {
  * STEP 4 Picard
  */
 /* Comment duplicated reads removal*/
-
+/*
 if (!params.keepduplicates){
 
 	process picard {
@@ -572,422 +449,6 @@ if (!params.keepduplicates){
 	bai_epic = bai_dedup_epic
 	bai_for_saturation = bai_dedup_saturation
 }
-
-/*
- * STEP 5 Read_count_statistics
- */
-
-process countstat {
-    tag "${input[0].baseName}"
-    publishDir "${params.outdir}/countstat", mode: 'copy'
-
-    input:
-    file input from bed_total.toSortedList()
-
-    output:
-    file 'read_count_statistics.txt' into countstat_results
-
-    script:
-    """
-    countstat.pl $input
-    """
-}
-
-
-/*
- * STEP 6.1 Phantompeakqualtools
- */
-
-process phantompeakqualtools {
-    tag "$prefix"
-    publishDir "${params.outdir}/phantompeakqualtools", mode: 'copy',
-                saveAs: {filename -> filename.indexOf(".out") > 0 ? "logs/$filename" : "$filename"}
-
-    input:
-    file bam from bam_spp
-
-    output:
-    file '*.pdf' into spp_results
-    file '*.spp.out' into spp_out, spp_out_mqc
-
-    script:
-    prefix = bam[0].toString() - ~/(\.dedup)?(\.sorted)?(\.bam)?$/
-    """
-    run_spp.R -c="$bam" -savp -out="${prefix}.spp.out"
-    """
-}
-
-
-/*
- * STEP 6.2 Combine and calculate NSC & RSC
- */
-
-process calculateNSCRSC {
-    tag "${spp_out_list[0].baseName}"
-    publishDir "${params.outdir}/phantompeakqualtools", mode: 'copy'
-
-    input:
-    file spp_out_list from spp_out.collect()
-
-    output:
-    file 'cross_correlation_processed.txt' into calculateNSCRSC_results
-
-    script:
-    """
-    cat $spp_out_list > cross_correlation.txt
-    calculateNSCRSC.r cross_correlation.txt
-    """
-}
-
-
-/*
- * STEP 7 deepTools
- */
-
-process deepTools {
-    tag "${bam[0].baseName}"
-    publishDir "${params.outdir}/deepTools", mode: 'copy'
-
-    input:
-    file bam from bam_deepTools.collect()
-    file bai from bai_deepTools.collect()
-
-    output:
-    file '*.{txt,pdf,png,npz,bw}' into deepTools_results
-    file '*.txt' into deepTools_multiqc
-
-    script:
-    if (!params.singleEnd) {
-        """
-        bamPEFragmentSize \\
-            --binSize 1000 \\
-            --bamfiles $bam \\
-            --histogram fragment_length_distribution_histogram.png \\
-            --plotTitle "Fragment Length Distribution"
-        """
-    }
-    if(bam instanceof Path){
-        log.warn("Only 1 BAM file - skipping multiBam deepTool steps")
-        """
-        plotFingerprint \\
-            -b $bam \\
-            --plotFile ${bam.baseName}_fingerprints.pdf \\
-            --outRawCounts ${bam.baseName}_fingerprint.txt \\
-            --extendReads ${params.extendReadsLen} \\
-            --skipZeros \\
-            --ignoreDuplicates \\
-            --numberOfSamples 50000 \\
-            --binSize 500 \\
-            --plotFileFormat pdf \\
-            --plotTitle "${bam.baseName} Fingerprints"
-
-        bamCoverage \\
-           -b $bam \\
-           --extendReads ${params.extendReadsLen} \\
-           --normalizeUsingRPKM \\
-           -o ${bam}.bw
-        """
-    } else {
-        """
-        plotFingerprint \\
-            -b $bam \\
-            --plotFile fingerprints.pdf \\
-            --outRawCounts fingerprint.txt \\
-            --extendReads ${params.extendReadsLen} \\
-            --skipZeros \\
-            --ignoreDuplicates \\
-            --numberOfSamples 50000 \\
-            --binSize 500 \\
-            --plotFileFormat pdf \\
-            --plotTitle "Fingerprints"
-
-        for bamfile in ${bam}
-        do
-            bamCoverage \\
-              -b \$bamfile \\
-              --extendReads ${params.extendReadsLen} \\
-              --normalizeUsingRPKM \\
-              -o \${bamfile}.bw
-        done
-
-        multiBamSummary \\
-            bins \\
-            --binSize 10000 \\
-            --bamfiles $bam \\
-            -out multiBamSummary.npz \\
-            --extendReads ${params.extendReadsLen} \\
-            --ignoreDuplicates \\
-            --centerReads
-
-        plotCorrelation \\
-            -in multiBamSummary.npz \\
-            -o scatterplot_PearsonCorr_multiBamSummary.png \\
-            --outFileCorMatrix scatterplot_PearsonCorr_multiBamSummary.txt \\
-            --corMethod pearson \\
-            --skipZeros \\
-            --removeOutliers \\
-            --plotTitle "Pearson Correlation of Read Counts" \\
-            --whatToPlot scatterplot
-
-        plotCorrelation \\
-            -in multiBamSummary.npz \\
-            -o heatmap_SpearmanCorr_multiBamSummary.png \\
-            --outFileCorMatrix heatmap_SpearmanCorr_multiBamSummary.txt \\
-            --corMethod spearman \\
-            --skipZeros \\
-            --plotTitle "Spearman Correlation of Read Counts" \\
-            --whatToPlot heatmap \\
-            --colorMap RdYlBu \\
-            --plotNumbers
-
-        plotPCA \\
-            -in multiBamSummary.npz \\
-            -o pcaplot_multiBamSummary.png \\
-            --plotTitle "Principal Component Analysis Plot" \\
-            --outFileNameData pcaplot_multiBamSummary.txt
-        """
-    }
-}
-
-
-/*
- * STEP 8 Ngsplot
- */
-
-process ngsplot {
-    tag "${input_bam_files[0].baseName}"
-    publishDir "${params.outdir}/ngsplot", mode: 'copy'
-
-    input:
-    file input_bam_files from bam_ngsplot.collect()
-    file input_bai_files from bai_ngsplot.collect()
-
-    output:
-    file '*.pdf' into ngsplot_results
-
-    when: REF_ngsplot
-
-    script:
-    """
-    ngs_config_generate.r $input_bam_files
-
-    ngs.plot.r \\
-        -G $REF_ngsplot \\
-        -R genebody \\
-        -C ngsplot_config \\
-        -O Genebody \\
-        -D ensembl \\
-        -FL 300
-
-    ngs.plot.r \\
-        -G $REF_ngsplot \\
-        -R tss \\
-        -C ngsplot_config \\
-        -O TSS \\
-        -FL 300
-    """
-}
-
-
-/*
- * STEP 9.1 MACS
- */
-if (params.peakCaller =~ /(all|macs)/){
-	process macs {
-	tag "${bam_for_macs[0].baseName}"
-	publishDir "${params.outdir}/macs", mode: 'copy'
-	container 'genomicpariscentre/macs2'
-
-	input:
-	file bam_for_macs from bam_macs.collect()
-	file bai_for_macs from bai_macs.collect()
-	set chip_sample_id, ctrl_sample_id, analysis_id from macs_para
-
-	output:
-	file '*.{bed,r,narrowPeak,broadPeak,gappedPeak}' into macs_results
-	file '*.xls' into macs_peaks
-
-	when: REF_macs
-
-	script:
-	if (params.keepduplicates){
-		ctrl = ctrl_sample_id == '' ? '' : "-c ${ctrl_sample_id}.sorted.bam"
-		chip = "${chip_sample_id}.sorted.bam"
-	}else{
-		ctrl = ctrl_sample_id == '' ? '' : "-c ${ctrl_sample_id}.dedup.sorted.bam"
-		chip = "${chip_sample_id}.dedup.sorted.bam"
-	}
-	pvalue = params.pvalue ? "--pvalue ${params.pvalue}" : ''
-	broad = params.broad ? "--broad" : ''
-	keepduplicates = params.keepduplicates ? '--keep-dup all' : ''
-	nomodel = params.macsnomodel ? '--nomodel' : ''
-	extsize = params.extsize ? "--extsize ${params.extsize}" : ''
-	qvalue = params.qvalue ? "--qvalue ${params.qvalue}" : ''
-	mfold = params.mfold ? "-m ${params.mfold}" : ''
-
-	"""
-	macs2 callpeak \\
-		-t $chip \\
-		$ctrl \\
-		$broad \\
-		$keepduplicates \\
-		-f BAM \\
-		-g $REF_macs \\
-		-n $analysis_id \\
-		$qvalue \\
-		$mfold \\
-		$pvalue \\
-		$nomodel \\
-		$extsize
-	"""
-	}
-}
-
-/*
- * STEP 9.2 Saturation analysis
- */
-if (params.saturation) {
-
-  process saturation {
-     tag "${bam_for_saturation[0].baseName}"
-     publishDir "${params.outdir}/macs/saturation", mode: 'copy'
-
-     input:
-     file bam_for_saturation from bam_for_saturation.collect()
-     file bai_for_saturation from bai_for_saturation.collect()
-     set chip_sample_id, ctrl_sample_id, analysis_id from saturation_para
-     each sampling from 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0
-
-     output:
-     file '*.xls' into saturation_results
-
-     when: REF_macs
-
-     script:
-     def ctrl = ctrl_sample_id == '' ? '' : "-c ${ctrl_sample_id}.sorted.bam"
-     broad = params.broad ? "--broad" : ''
-     """
-     samtools view -b -s ${sampling} ${chip_sample_id}.sorted.bam > ${chip_sample_id}.${sampling}.sorted.bam
-     macs2 callpeak \\
-         -t ${chip_sample_id}.${sampling}.sorted.bam \\
-         $ctrl \\
-         $broad \\
-         -f BAM \\
-         -g $REF_macs \\
-         -n ${analysis_id}.${sampling} \\
-         -q $qvalue
-     """
-  }
-
-  process saturation_r {
-     tag "${saturation_results_collection[0].baseName}"
-     publishDir "${params.outdir}/macs/saturation", mode: 'copy'
-
-     input:
-     file macsconfig from macsconfig
-     file countstat from countstat_results
-     file saturation_results_collection from saturation_results.collect()
-
-     output:
-     file '*.{txt,pdf}' into saturation_summary
-
-     when: REF_macs
-
-     script:
-     """
-     saturation_results_processing.r $params.rlocation $macsconfig $countstat $saturation_results_collection
-     """
-  }
-}
-
-
-/*
- * STEP 9.3 EPIC peakCaller */
-
-
-if (params.peakCaller =~ /(all|epic)/){
-
-	process epic {
-	tag "${bed_for_epic[0].baseName}"
-	publishDir "${params.outdir}/epic", mode: 'copy'
-
-	input:
-	file bed_for_epic from bed_epic.collect()
-	file chromsizes from chromsizes_epic
-	set chip_sample_id, ctrl_sample_id, analysis_id from epic_para
-
-	output:
-	file '*.txt' into epic_peaks
-
-	script:
-	if(params.keepduplicates){
-		ctrl = ctrl_sample_id == '' ? '' : "--control ${ctrl_sample_id}.sorted.bed"
-		chip = "${chip_sample_id}.sorted.bed"
-	}else{
-		ctrl = ctrl_sample_id == '' ? '' : "--control ${ctrl_sample_id}.dedup.sorted.bed"
-		chip = "${chip_sample_id}.dedup.sorted.bed"
-	}
-
-	pvalue = params.pvalue ? "--pvalue ${params.pvalue}" : ''
-	keepduplicates = params.keepduplicates ? '--keep-dup all' : ''
-	qvalue = params.qvalue ? "--qvalue ${params.qvalue}" : ''
-
-	"""
-	epic \\
-	--treatment $chip \\
-	$ctrl \\
-	$keepduplicates \\
-	--chromsizes $chromsizes \\
-	--effective-genome-fraction 0.99 \\
-	--outfile ${analysis_id}_diffusePeakCalling.txt
-	"""
-	}
-}
-
-// Mix peak files into one channel
-if (params.peakCaller =~ /all/){
-	macs_peaks.mix(epic_peaks)
-			.set { peaks_all }
-}
-
-if (params.peakCaller =~ /macs/){
-	peaks_all = macs_peaks
-}
-
-if (params.peakCaller =~ /epic/){
-	peaks_all = epic_peaks
-}
-
-
-/*
- * STEP 10 Post peak calling processing
- */
-process uropa {
-    tag "${peaks_collection.baseName}"
-    publishDir "${params.outdir}/chippeakanno", mode: 'copy'
-	container 'loosolab/uropa'
-
-    input:
-    file peaks_collection from peaks_all
-    file gtf from gtf
-	file uropa_config
-
-    output:
-    file '*.txt' into chippeakanno_results
-
-    when: REF_macs
-
-    script:
-    filtering = params.blacklist_filtering ? "${params.blacklist}" : "No-filtering"
-    prefix = peaks_collection.baseName
-
-    """
-	sed 's/##GTF##/$gtf/' $uropa_config | sed 's/##BED##/bed_formatted/'> $prefix"_fill.json"
-	grep -Pv "(^#|^chr\t|^Chromosome)" $peaks_collection | tr ' ' '\t' > bed_formatted
-	uropa -i $prefix"_fill.json" -p $prefix
-    """
-}
-
 
 /*
  * Parse software version numbers
@@ -1178,3 +639,4 @@ workflow.onComplete {
         }
     }
 }
+*/

@@ -1,0 +1,6 @@
+## DATA TEST
+test/
+
+## Container images
+*.img
+*.simg
