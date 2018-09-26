@@ -4,3 +4,8 @@ test/
 ## Container images
 *.img
 *.simg
+
+## Nextflow results and logs
+.nextflow*
+.nextflow/
+results/
