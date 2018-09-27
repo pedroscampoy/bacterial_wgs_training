@@ -253,38 +253,38 @@ process fastqc {
 
     script:
     """
-    fastqc -q $reads
+    fastqc -t 1 $reads
     """
 }
 
-process trimming {
-	tag "$name"
-	publishDir "${params.outdir}/trimming", mode: 'copy',
-		saveAs: {filename ->
-			if (filename.indexOf("_fastqc") > 0) "FastQC/$filename"
-			else if (filename.indexOf("trimming_log") > 0) "logs/$filename"
-			else params.saveTrimmed ? filename : null
-	}
-
-	input:
-	set val(name), file(reads) from raw_reads_trimming
-
-	output:
-	file '*_paired.fastq.gz' into trimmed_paired_reads
-	file '*_unpaired.fastq.gz' into trimmed_unpaired_reads
-	file '*_fastqc.{zip,html}' into trimming_fastqc_reports
-	file 'trimming.log' into trimmomatic_results
-
-	script:
-	"""
-	trimmomatic PE -threads 10 -phred33 $reads $name"_R1_paired.fastq" $name"_R1_unpaired.fastq" $name"_R2_paired.fastq" $name"_R2_unpaired.fastq" ILLUMINACLIP:$trimmomatic_path/adapters/NexteraPE-PE.fa:2:30:10 SLIDINGWINDOW:4:20 MINLEN:50 2>&1 > trimming.log
-
-	gzip *.fastq
-
-	fastqc -q *_paired.fastq.gz
-
-	"""
-}
+//process trimming {
+//	tag "$name"
+//	publishDir "${params.outdir}/trimming", mode: 'copy',
+//		saveAs: {filename ->
+//			if (filename.indexOf("_fastqc") > 0) "FastQC/$filename"
+//			else if (filename.indexOf("trimming_log") > 0) "logs/$filename"
+//			else params.saveTrimmed ? filename : null
+//	}
+//
+//	input:
+//	set val(name), file(reads) from raw_reads_trimming
+//
+//	output:
+//	file '*_paired.fastq.gz' into trimmed_paired_reads
+//	file '*_unpaired.fastq.gz' into trimmed_unpaired_reads
+//	file '*_fastqc.{zip,html}' into trimming_fastqc_reports
+//	file 'trimming.log' into trimmomatic_results
+//
+//	script:
+//	"""
+//	trimmomatic PE -phred33 $reads $name"_R1_paired.fastq" $name"_R1_unpaired.fastq" $name"_R2_paired.fastq" $name"_R2_unpaired.fastq" ILLUMINACLIP:$trimmomatic_path/adapters/NexteraPE-PE.fa:2:30:10 SLIDINGWINDOW:4:20 MINLEN:50 2>&1 > trimming.log
+//
+//	gzip *.fastq
+//
+//	fastqc -q *_paired.fastq.gz
+//
+//	"""
+//}
 
 
 ///*
