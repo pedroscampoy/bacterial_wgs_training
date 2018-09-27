@@ -57,7 +57,7 @@ def helpMessage() {
       --bwa_index                   Path to BWA index (Mandatory if not --genome supplied)
 
 	Steps available:
-	  --steps [str]					Select which step to perform (preprocessing|mapping|assembly|outbreakSNP|outbreakMLST)
+	  --step [str]					Select which step to perform (preprocessing|mapping|assembly|outbreakSNP|outbreakMLST)
 
     Options:
       --singleEnd                   Specifies that the input is single end reads
@@ -213,8 +213,9 @@ try {
 }
 
 /*
- * PREPROCESSING - Build BWA index
+ * Build BWA index
  */
+if (params.step =~ /(mapping|outbreakSNP)/)
 if(!params.bwa_index && fasta_file){
     process makeBWAindex {
         tag "${fasta.baseName}"
@@ -239,201 +240,231 @@ if(!params.bwa_index && fasta_file){
 /*
  * STEP 1.1 - FastQC
  */
-process fastqc {
-    tag "$name"
-    publishDir "${params.outdir}/fastqc", mode: 'copy',
-        saveAs: {filename -> filename.indexOf(".zip") > 0 ? "zips/$filename" : "$filename"}
+if (params.step =~ /(preprocessing|mapping|assembly|outbreakSNP|outbreakMLST)/ ){
+	process fastqc {
+		tag "$name"
+		publishDir "${params.outdir}/fastqc", mode: 'copy',
+			saveAs: {filename -> filename.indexOf(".zip") > 0 ? "zips/$filename" : "$filename"}
 
-    input:
-    set val(name), file(reads) from raw_reads_fastqc
+		input:
+		set val(name), file(reads) from raw_reads_fastqc
 
-    output:
-    file '*_fastqc.{zip,html}' into fastqc_results
-    file '.command.out' into fastqc_stdout
+		output:
+		file '*_fastqc.{zip,html}' into fastqc_results
+		file '.command.out' into fastqc_stdout
 
-    script:
-    """
-    fastqc -t 1 $reads
-    """
+		script:
+		"""
+		fastqc -t 1 $reads
+		"""
+	}
+
+	process trimming {
+		tag "$name"
+		publishDir "${params.outdir}/trimming", mode: 'copy',
+			saveAs: {filename ->
+				if (filename.indexOf("_fastqc") > 0) "FastQC/$filename"
+				else if (filename.indexOf("trimming_log") > 0) "logs/$filename"
+				else params.saveTrimmed ? filename : null
+		}
+
+		input:
+		set val(name), file(reads) from raw_reads_trimming
+
+		output:
+		file '*_paired.fastq.gz' into trimmed_paired_reads
+		file '*_unpaired.fastq.gz' into trimmed_unpaired_reads
+		file '*_fastqc.{zip,html}' into trimming_fastqc_reports
+		file 'trimming.log' into trimmomatic_results
+
+		script:
+		"""
+		trimmomatic PE -phred33 $reads $name"_R1_paired.fastq" $name"_R1_unpaired.fastq" $name"_R2_paired.fastq" $name"_R2_unpaired.fastq" ILLUMINACLIP:$trimmomatic_path/adapters/NexteraPE-PE.fa:2:30:10 SLIDINGWINDOW:4:20 MINLEN:50 2>&1 > trimming.log
+
+		gzip *.fastq
+
+		fastqc -q *_paired.fastq.gz
+
+		"""
+	}
+}
+/*
+ * STEP 3.1 - align with bwa
+ */
+
+if (params.step =~ /mapping/){
+	process bwa {
+		tag "$prefix"
+		publishDir path: { params.saveAlignedIntermediates ? "${params.outdir}/bwa" : params.outdir }, mode: 'copy',
+				saveAs: {filename -> params.saveAlignedIntermediates ? filename : null }
+
+		input:
+		file reads from trimmed_paired_reads
+		file index from bwa_index
+		file fasta from fasta_file
+
+		output:
+		file '*.bam' into bwa_bam
+
+		script:
+		prefix = reads[0].toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
+		"""
+		bwa mem -M $fasta $reads | samtools view -bT $fasta - > ${prefix}.bam
+		"""
+	}
+
+
+	/*
+	* STEP 3.2 - post-alignment processing
+	*/
+	process samtools {
+		tag "${bam.baseName}"
+		publishDir path: "${params.outdir}/bwa", mode: 'copy',
+				saveAs: { filename ->
+					if (filename.indexOf(".stats.txt") > 0) "stats/$filename"
+					else params.saveAlignedIntermediates ? filename : null
+				}
+
+		input:
+		file bam from bwa_bam
+
+		output:
+		file '*.sorted.bam' into bam_for_mapped, bam_picard
+		file '*.sorted.bam.bai' into bwa_bai, bai_picard,bai_for_mapped
+		file '*.sorted.bed' into bed_total
+		file '*.stats.txt' into samtools_stats
+
+		script:
+		"""
+		samtools sort $bam -o ${bam.baseName}.sorted.bam
+		samtools index ${bam.baseName}.sorted.bam
+		bedtools bamtobed -i ${bam.baseName}.sorted.bam | sort -k 1,1 -k 2,2n -k 3,3n -k 6,6 > ${bam.baseName}.sorted.bed
+		samtools stats ${bam.baseName}.sorted.bam > ${bam.baseName}.stats.txt
+		"""
+	}
+
+
+	/*
+	* STEP 3.3 - Statistics about mapped and unmapped reads against ref genome
+	*/
+
+	process bwa_mapped {
+		tag "${input_files[0].baseName}"
+		publishDir "${params.outdir}/bwa/mapped", mode: 'copy'
+
+		input:
+		file input_files from bam_for_mapped.collect()
+		file bai from bai_for_mapped.collect()
+
+		output:
+		file 'mapped_refgenome.txt' into bwa_mapped
+
+		script:
+		"""
+		for i in $input_files
+		do
+		samtools idxstats \${i} | awk -v filename="\${i}" '{mapped+=\$3; unmapped+=\$4} END {print filename,"\t",mapped,"\t",unmapped}'
+		done > mapped_refgenome.txt
+		"""
+	}
+
+	/*
+	* STEP 4 Picard
+	*/
+	/* Comment duplicated reads removal*/
+	if (!params.keepduplicates){
+
+		process picard {
+			tag "$prefix"
+			publishDir "${params.outdir}/picard", mode: 'copy'
+
+			input:
+			file bam from bam_picard
+
+			output:
+			file '*.dedup.sorted.bam' into bam_dedup_spp, bam_dedup_ngsplot, bam_dedup_deepTools, bam_dedup_macs, bam_dedup_saturation, bam_dedup_epic
+			file '*.dedup.sorted.bam.bai' into bai_dedup_deepTools, bai_dedup_spp, bai_dedup_ngsplot, bai_dedup_macs, bai_dedup_saturation, bai_dedup_epic
+			file '*.dedup.sorted.bed' into bed_dedup,bed_epic_dedup
+			file '*.picardDupMetrics.txt' into picard_reports
+
+			script:
+			prefix = bam[0].toString() - ~/(\.sorted)?(\.bam)?$/
+			if( task.memory == null ){
+				log.warn "[Picard MarkDuplicates] Available memory not known - defaulting to 6GB ($prefix)"
+				avail_mem = 6000
+			} else {
+				avail_mem = task.memory.toMega()
+				if( avail_mem <= 0){
+					avail_mem = 6000
+					log.warn "[Picard MarkDuplicates] Available memory 0 - defaulting to 6GB ($prefix)"
+				} else if( avail_mem < 250){
+					avail_mem = 250
+					log.warn "[Picard MarkDuplicates] Available memory under 250MB - defaulting to 250MB ($prefix)"
+				}
+			}
+			"""
+			java -Xmx${avail_mem}m -jar \$PICARD_HOME/picard.jar MarkDuplicates \\
+				INPUT=$bam \\
+				OUTPUT=${prefix}.dedup.bam \\
+				ASSUME_SORTED=true \\
+				REMOVE_DUPLICATES=true \\
+				METRICS_FILE=${prefix}.picardDupMetrics.txt \\
+				VALIDATION_STRINGENCY=LENIENT \\
+				PROGRAM_RECORD_ID='null'
+
+			samtools sort ${prefix}.dedup.bam -o ${prefix}.dedup.sorted.bam
+			samtools index ${prefix}.dedup.sorted.bam
+			bedtools bamtobed -i ${prefix}.dedup.sorted.bam | sort -k 1,1 -k 2,2n -k 3,3n -k 6,6 > ${prefix}.dedup.sorted.bed
+			"""
+		}
+		//Change variables to dedup variables
+		bam_spp = bam_dedup_spp
+		bam_ngsplot = bam_dedup_ngsplot
+		bam_deepTools = bam_dedup_deepTools
+		bam_macs = bam_dedup_macs
+		bam_epic = bam_dedup_epic
+		bam_for_saturation = bam_dedup_saturation
+		bed_total = bed_dedup
+		bed_epic = bed_epic_dedup
+
+		bai_spp = bai_dedup_spp
+		bai_ngsplot = bai_dedup_ngsplot
+		bai_deepTools = bai_dedup_deepTools
+		bai_macs = bai_dedup_macs
+		bai_epic = bai_dedup_epic
+		bai_for_saturation = bai_dedup_saturation
+	}
 }
 
-//process trimming {
-//	tag "$name"
-//	publishDir "${params.outdir}/trimming", mode: 'copy',
-//		saveAs: {filename ->
-//			if (filename.indexOf("_fastqc") > 0) "FastQC/$filename"
-//			else if (filename.indexOf("trimming_log") > 0) "logs/$filename"
-//			else params.saveTrimmed ? filename : null
-//	}
-//
-//	input:
-//	set val(name), file(reads) from raw_reads_trimming
-//
-//	output:
-//	file '*_paired.fastq.gz' into trimmed_paired_reads
-//	file '*_unpaired.fastq.gz' into trimmed_unpaired_reads
-//	file '*_fastqc.{zip,html}' into trimming_fastqc_reports
-//	file 'trimming.log' into trimmomatic_results
-//
-//	script:
-//	"""
-//	trimmomatic PE -phred33 $reads $name"_R1_paired.fastq" $name"_R1_unpaired.fastq" $name"_R2_paired.fastq" $name"_R2_unpaired.fastq" ILLUMINACLIP:$trimmomatic_path/adapters/NexteraPE-PE.fa:2:30:10 SLIDINGWINDOW:4:20 MINLEN:50 2>&1 > trimming.log
-//
-//	gzip *.fastq
-//
-//	fastqc -q *_paired.fastq.gz
-//
-//	"""
-//}
+
+if (params.step =~ /assembly/){
+
+	process spades {
+		tag "$prefix"
+		publishDir path: { "${params.outdir}/spades" }, mode: 'copy',
+		saveAs {
+			filename ->
+			if(filename.indexOf("configs.fasta") > 0) $prefix"_contigs.fasta"
+			}
+
+		input:
+		set file(readsR1),file(readsR2) from trimmed_paired_reads
+
+		output:
+		file "*.fasta" into spades_results
+
+		script:
+		prefix = readsR1.toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_trimmed_paired)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
+		"""
+		spades.py --phred-offset 33 -1 $readsR1 -2 $readsR2 -o .
+		"""
+	}
 
 
-///*
-// * STEP 3.1 - align with bwa
-// */
-//process bwa {
-//    tag "$prefix"
-//    publishDir path: { params.saveAlignedIntermediates ? "${params.outdir}/bwa" : params.outdir }, mode: 'copy',
-//               saveAs: {filename -> params.saveAlignedIntermediates ? filename : null }
-//
-//    input:
-//    file reads from trimmed_paired_reads
-//    file index from bwa_index
-//    file fasta from fasta_file
-//
-//    output:
-//    file '*.bam' into bwa_bam
-//
-//    script:
-//    prefix = reads[0].toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
-//    filtering = params.allow_multi_align ? '' : "| samtools view -b -q 1 -F 4 -F 256"
-//    """
-//    bwa mem -M $fasta $reads | samtools view -bT $fasta - $filtering > ${prefix}.bam
-//    """
-//}
-//
-//
-///*
-// * STEP 3.2 - post-alignment processing
-// */
-///*
-//process samtools {
-//    tag "${bam.baseName}"
-//    publishDir path: "${params.outdir}/bwa", mode: 'copy',
-//               saveAs: { filename ->
-//                   if (filename.indexOf(".stats.txt") > 0) "stats/$filename"
-//                   else params.saveAlignedIntermediates ? filename : null
-//               }
-//
-//    input:
-//    file bam from bwa_bam
-//
-//    output:
-//    file '*.sorted.bam' into bam_for_mapped, bam_picard,bam_spp, bam_ngsplot, bam_deepTools, bam_macs, bam_ded,bam_epic
-//    file '*.sorted.bam.bai' into bwa_bai, bai_picard,bai_for_mapped, bai_deepTools, bai_ngsplot, bai_macs, bai_saturation, bai_epic
-//    file '*.sorted.bed' into bed_total,bed_epic
-//    file '*.stats.txt' into samtools_stats
-//
-//    script:
-//    """
-//    samtools sort $bam -o ${bam.baseName}.sorted.bam
-//    samtools index ${bam.baseName}.sorted.bam
-//    bedtools bamtobed -i ${bam.baseName}.sorted.bam | sort -k 1,1 -k 2,2n -k 3,3n -k 6,6 > ${bam.baseName}.sorted.bed
-//    samtools stats ${bam.baseName}.sorted.bam > ${bam.baseName}.stats.txt
-//    """
-//}
-//
-//
-///*
-// * STEP 3.3 - Statistics about mapped and unmapped reads against ref genome
-// */
-//
-//process bwa_mapped {
-//    tag "${input_files[0].baseName}"
-//    publishDir "${params.outdir}/bwa/mapped", mode: 'copy'
-//
-//    input:
-//    file input_files from bam_for_mapped.collect()
-//    file bai from bai_for_mapped.collect()
-//
-//    output:
-//    file 'mapped_refgenome.txt' into bwa_mapped
-//
-//    script:
-//    """
-//    for i in $input_files
-//    do
-//      samtools idxstats \${i} | awk -v filename="\${i}" '{mapped+=\$3; unmapped+=\$4} END {print filename,"\t",mapped,"\t",unmapped}'
-//    done > mapped_refgenome.txt
-//    """
-//}
-//
-///*
-// * STEP 4 Picard
-// */
-///* Comment duplicated reads removal*/
-//if (!params.keepduplicates){
-//
-//	process picard {
-//		tag "$prefix"
-//		publishDir "${params.outdir}/picard", mode: 'copy'
-//
-//		input:
-//		file bam from bam_picard
-//
-//		output:
-//		file '*.dedup.sorted.bam' into bam_dedup_spp, bam_dedup_ngsplot, bam_dedup_deepTools, bam_dedup_macs, bam_dedup_saturation, bam_dedup_epic
-//		file '*.dedup.sorted.bam.bai' into bai_dedup_deepTools, bai_dedup_spp, bai_dedup_ngsplot, bai_dedup_macs, bai_dedup_saturation, bai_dedup_epic
-//		file '*.dedup.sorted.bed' into bed_dedup,bed_epic_dedup
-//		file '*.picardDupMetrics.txt' into picard_reports
-//
-//		script:
-//		prefix = bam[0].toString() - ~/(\.sorted)?(\.bam)?$/
-//		if( task.memory == null ){
-//			log.warn "[Picard MarkDuplicates] Available memory not known - defaulting to 6GB ($prefix)"
-//			avail_mem = 6000
-//		} else {
-//			avail_mem = task.memory.toMega()
-//			if( avail_mem <= 0){
-//				avail_mem = 6000
-//				log.warn "[Picard MarkDuplicates] Available memory 0 - defaulting to 6GB ($prefix)"
-//			} else if( avail_mem < 250){
-//				avail_mem = 250
-//				log.warn "[Picard MarkDuplicates] Available memory under 250MB - defaulting to 250MB ($prefix)"
-//			}
-//		}
-//		"""
-//		java -Xmx${avail_mem}m -jar \$PICARD_HOME/picard.jar MarkDuplicates \\
-//			INPUT=$bam \\
-//			OUTPUT=${prefix}.dedup.bam \\
-//			ASSUME_SORTED=true \\
-//			REMOVE_DUPLICATES=true \\
-//			METRICS_FILE=${prefix}.picardDupMetrics.txt \\
-//			VALIDATION_STRINGENCY=LENIENT \\
-//			PROGRAM_RECORD_ID='null'
-//
-//		samtools sort ${prefix}.dedup.bam -o ${prefix}.dedup.sorted.bam
-//		samtools index ${prefix}.dedup.sorted.bam
-//		bedtools bamtobed -i ${prefix}.dedup.sorted.bam | sort -k 1,1 -k 2,2n -k 3,3n -k 6,6 > ${prefix}.dedup.sorted.bed
-//		"""
-//	}
-//	//Change variables to dedup variables
-//	bam_spp = bam_dedup_spp
-//	bam_ngsplot = bam_dedup_ngsplot
-//	bam_deepTools = bam_dedup_deepTools
-//	bam_macs = bam_dedup_macs
-//	bam_epic = bam_dedup_epic
-//	bam_for_saturation = bam_dedup_saturation
-//	bed_total = bed_dedup
-//	bed_epic = bed_epic_dedup
-//
-//	bai_spp = bai_dedup_spp
-//	bai_ngsplot = bai_dedup_ngsplot
-//	bai_deepTools = bai_dedup_deepTools
-//	bai_macs = bai_dedup_macs
-//	bai_epic = bai_dedup_epic
-//	bai_for_saturation = bai_dedup_saturation
-//}
-//
+
+}
+
+
 ///*
 // * Parse software version numbers
 // */
