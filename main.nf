@@ -55,6 +55,7 @@ def helpMessage() {
     References
       --fasta                       Path to Fasta reference (Mandatory if not --genome supplied)
       --bwa_index                   Path to BWA index (Mandatory if not --genome supplied)
+      --gtf							Path to GTF reference file.
 
 	Steps available:
 	  --step [str]					Select which step to perform (preprocessing|mapping|assembly|outbreakSNP|outbreakMLST)
@@ -107,8 +108,8 @@ if( params.bwa_index ){
 params.gtf = false
 
 if( params.gtf ){
-    gtf = file(params.gtf)
-    if( !gtf.exists() ) exit 1, "GTF file not found: ${params.gtf}."
+    gtf_file = file(params.gtf)
+    if( !gtf_file.exists() ) exit 1, "GTF file not found: ${params.gtf}."
 }
 
 // Steps
@@ -264,7 +265,7 @@ if (params.step =~ /(preprocessing|mapping|assembly|outbreakSNP|outbreakMLST)/ )
 		publishDir "${params.outdir}/trimming", mode: 'copy',
 			saveAs: {filename ->
 				if (filename.indexOf("_fastqc") > 0) "FastQC/$filename"
-				else if (filename.indexOf("trimming_log") > 0) "logs/$filename"
+				else if (filename.indexOf(".log") > 0) "logs/$filename"
 				else params.saveTrimmed ? filename : null
 		}
 
@@ -275,11 +276,11 @@ if (params.step =~ /(preprocessing|mapping|assembly|outbreakSNP|outbreakMLST)/ )
 		file '*_paired.fastq.gz' into trimmed_paired_reads
 		file '*_unpaired.fastq.gz' into trimmed_unpaired_reads
 		file '*_fastqc.{zip,html}' into trimming_fastqc_reports
-		file 'trimming.log' into trimmomatic_results
+		file '*.log' into trimmomatic_results
 
 		script:
 		"""
-		trimmomatic PE -phred33 $reads $name"_R1_paired.fastq" $name"_R1_unpaired.fastq" $name"_R2_paired.fastq" $name"_R2_unpaired.fastq" ILLUMINACLIP:$trimmomatic_path/adapters/NexteraPE-PE.fa:2:30:10 SLIDINGWINDOW:4:20 MINLEN:50 2>&1 > trimming.log
+		trimmomatic PE -phred33 $reads $name"_R1_paired.fastq" $name"_R1_unpaired.fastq" $name"_R2_paired.fastq" $name"_R2_unpaired.fastq" ILLUMINACLIP:$trimmomatic_path/adapters/NexteraPE-PE.fa:2:30:10 SLIDINGWINDOW:4:20 MINLEN:50 2>&1 > $name".log"
 
 		gzip *.fastq
 
@@ -441,97 +442,143 @@ if (params.step =~ /assembly/){
 
 	process spades {
 		tag "$prefix"
-		publishDir path: { "${params.outdir}/spades" }, mode: 'copy',
-		saveAs {
-			filename ->
-			if(filename.indexOf("configs.fasta") > 0) $prefix"_contigs.fasta"
-			}
+		publishDir path: { "${params.outdir}/spades" }, mode: 'copy'
 
 		input:
 		set file(readsR1),file(readsR2) from trimmed_paired_reads
 
 		output:
-		file "*.fasta" into spades_results
+		file "${prefix}_scaffolds.fasta" into scaffold_quast,scaffold_prokka
+		file "${prefix}_contigs.fasta" into contigs_quast,contigs_prokka
 
 		script:
-		prefix = readsR1.toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_trimmed_paired)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
+		prefix = readsR1.toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_paired)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
 		"""
-		spades.py --phred-offset 33 -1 $readsR1 -2 $readsR2 -o .
+		spades.py --phred-offset 33 --only-assembler -1 $readsR1 -2 $readsR2 -o .
+		mv scaffolds.fasta $prefix"_scaffolds.fasta"
+		mv contigs.fasta $prefix"_contigs.fasta"
 		"""
 	}
 
+//	process pilon {
+//		tag "$prefix"
+//		publishDir path: { "${params.outdir}/spades" }, mode: 'copy'
+//
+//		input:
+//		set file(readsR1),file(readsR2) from trimmed_paired_reads
+//
+//		output:
+//		file "${prefix}_scaffolds.fasta" into scaffold_quast,scaffold_prokka
+//		file "${prefix}_contigs.fasta" into contigs_quast,contigs_prokka
+//
+//		script:
+//		prefix = readsR1.toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_paired)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
+//		"""
+//		java -Xmx10G -jar pilon-1.22.jar --genome "../05-assembly/"$sample"/scaffolds.fasta" --bam $sample"/"$sample".sorted.bam" --output $sample"/"$sample --changes
+//		"""
+//	}
 
+	process quast {
+		tag "$prefix"
+		publishDir path: {"${params.outdir}/quast"}, mode: 'copy',
+							saveAs: { filename -> "${prefix}_quast_results"}
+
+		input:
+		file scaffold from scaffold_quast
+		file fasta from fasta_file
+		file gtf from gtf_file
+
+		output:
+		file "quast_results" into quast_results
+		file "quast_results/latest/report.tsv" into quast_multiqc
+
+		script:
+		prefix = scaffold.toString() - ~/(_scaffolds\.fasta)?$/
+		"""
+		quast.py -R $fasta -G $gtf $scaffold
+		"""
+	}
+
+	process prokka {
+		tag "$prefix"
+		publishDir path: {"${params.outdir}/prokka"}, mode: 'copy',
+							saveAs: { filename -> if(filename == "prokka_results") "${prefix}_prokka_results"}
+
+		input:
+		file scaffold from scaffold_prokka
+
+		output:
+		file "prokka_results" into prokka_results
+		file "prokka_results/prokka.txt" into prokka_multiqc
+
+		script:
+		prefix = scaffold.toString() - ~/(_scaffolds\.fasta)?$/
+		"""
+		prokka --force --outdir prokka_results --prefix prokka --genus Listeria --species monocytogenes --strain $prefix --locustag BU-ISCIII --compliant --kingdom Bacteria $scaffold
+		"""
+	}
 
 }
 
 
-///*
-// * Parse software version numbers
-// */
-//process get_software_versions {
-//
-//    output:
-//    file 'software_versions_mqc.yaml' into software_versions_yaml
-//
-//    script:
-//    """
-//    echo $version > v_ngi_chipseq.txt
-//    echo $workflow.nextflow.version > v_nextflow.txt
-//    fastqc --version > v_fastqc.txt
-//    trim_galore --version > v_trim_galore.txt
-//    echo \$(bwa 2>&1) > v_bwa.txt
-//    samtools --version > v_samtools.txt
-//    bedtools --version > v_bedtools.txt
-//    echo "version" \$(java -Xmx2g -jar \$PICARD_HOME/picard.jar MarkDuplicates --version 2>&1) >v_picard.txt
-//    echo \$(plotFingerprint --version 2>&1) > v_deeptools.txt
-//    echo \$(ngs.plot.r 2>&1) > v_ngsplot.txt
-//    echo \$(macs2 --version 2>&1) > v_macs2.txt
-//    echo \$(epic --version 2>&1) > v_epic.txt
-//    multiqc --version > v_multiqc.txt
-//    scrape_software_versions.py > software_versions_mqc.yaml
-//    """
-//}
-//
-//
-// if (!params.keepduplicates) {  Channel.empty().set { picard_reports } }
-//
-///*
-// * STEP 11 MultiQC
-// */
-//
-//process multiqc {
-//    tag "$prefix"
-//    publishDir "${params.outdir}/MultiQC", mode: 'copy'
-//
-//    input:
-//    file multiqc_config
-//    file (fastqc:'fastqc/*') from fastqc_results.collect()
-//    file ('trimgalore/*') from trimgalore_results.collect()
-//    file ('samtools/*') from samtools_stats.collect()
-//    file ('deeptools/*') from deepTools_multiqc.collect()
-//    file ('picard/*') from picard_reports.collect()
-//    file ('phantompeakqualtools/*') from spp_out_mqc.collect()
-//    file ('phantompeakqualtools/*') from calculateNSCRSC_results.collect()
-//    file ('software_versions/*') from software_versions_yaml.collect()
-//
-//    output:
-//    file '*multiqc_report.html' into multiqc_report
-//    file '*_data' into multiqc_data
-//    file '.command.err' into multiqc_stderr
-//    val prefix into multiqc_prefix
-//
-//    script:
-//    prefix = fastqc[0].toString() - '_fastqc.html' - 'fastqc/'
-//    rtitle = custom_runName ? "--title \"$custom_runName\"" : ''
-//    rfilename = custom_runName ? "--filename " + custom_runName.replaceAll('\\W','_').replaceAll('_+','_') + "_multiqc_report" : ''
-//
-//    """
-//    multiqc -f $rtitle $rfilename --config $multiqc_config . 2>&1
-//    """
-//
-//}
-//
-//
+if (!params.keepduplicates) {  Channel.empty().set { picard_reports } }
+
+if (params.step =~ /preprocessing/){
+	Channel.empty().set { samtools_stats }
+	Channel.empty().set { picard_reports }
+	Channel.empty().set { prokka_multiqc }
+	Channel.empty().set { quast_multiqc }
+}
+
+if (params.step =~ /mapping/){
+	Channel.empty().set { prokka_multiqc }
+	Channel.empty().set { quast_multiqc }
+}
+
+if (params.step =~ /assembly/){
+	Channel.empty().set { samtools_stats }
+	Channel.empty().set { picard_reports }
+}
+
+/*
+ * STEP 11 MultiQC
+ */
+
+process multiqc {
+    tag "$prefix"
+    publishDir "${params.outdir}/MultiQC", mode: 'copy'
+
+    input:
+    file multiqc_config
+    file (fastqc:'fastqc/*') from fastqc_results.collect()
+    file ('trimommatic/*') from trimmomatic_results.collect()
+    file ('samtools/*') from samtools_stats.collect()
+    file ('picard/*') from picard_reports.collect()
+    file ('prokka/*') from prokka_multiqc.collect()
+    file ('quast/*') from quast_multiqc.collect()
+
+    output:
+    file '*multiqc_report.html' into multiqc_report
+    file '*_data' into multiqc_data
+    file '.command.err' into multiqc_stderr
+    val prefix into multiqc_prefix
+
+    script:
+    prefix = fastqc[0].toString() - '_fastqc.html' - 'fastqc/'
+    rtitle = custom_runName ? "--title \"$custom_runName\"" : ''
+    rfilename = custom_runName ? "--filename " + custom_runName.replaceAll('\\W','_').replaceAll('_+','_') + "_multiqc_report" : ''
+
+    """
+    multiqc -f $rtitle $rfilename --config $multiqc_config . 2>&1
+    """
+
+}
+
+
+workflow.onComplete {
+	log.info "BU-ISCIII - Pipeline complete"
+}
+
 ///*
 // * STEP 12 - Output Description HTML
 // */
