@@ -21,6 +21,8 @@ From: centos:latest
     scif install /opt/trimmomatic_v0.38_centos7.scif && \
     echo "Installing samtools app" && \
     scif install /opt/samtools_v1.9_centos7.scif && \
+    echo "Installing picard app" && \
+    scif install /opt/picard_v1.140_centos7.scif && \
     echo "Installing spades app" && \
     scif install /opt/spades_v3.8.0_centos7.scif && \
     echo "Installing prokka app" && \
@@ -33,8 +35,8 @@ From: centos:latest
     scif install /opt/bwa_v0.7.17_centos7.scif && \
     echo "Installing chewbbaca app" && \
     scif install /opt/chewbbaca_v2.0.5_centos7.scif && \
-    #echo "Installing outbreaker app" && \
-    #scif install /opt/outbreaker_v1.0_centos7.scif && \
+    echo "Installing outbreaker app" && \
+    scif install /opt/outbreaker_v1.0_centos7.scif && \
     echo "Installing get_homologues app" && \
     scif install /opt/gethomologues_v3.1.4_centos7.scif && \
     echo "Installing srst2 app" && \
