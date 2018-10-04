@@ -67,6 +67,16 @@ def helpMessage() {
       --notrim                      Specifying --notrim will skip the adapter trimming step.
       --saveTrimmed                 Save the trimmed Fastq files in the the Results directory.
 
+    Assembly options
+
+    Mapping options
+
+    OutbreakSNP options
+      --outbreaker_config			Config needed by wgs-outbreaker.
+
+	OutbreakMLST options
+
+
     Other options:
       --outdir                      The output directory where the results will be saved
     """.stripIndent()
@@ -518,6 +528,29 @@ if (params.step =~ /assembly/){
 		"""
 	}
 
+}
+
+if (params.step =~ /outbreakSNP/){
+
+	process wgsoutbreaker {
+	tag "WGSOutbreaker"
+	publishDir "${params.outdir}/WGS-Outbreaker", mode: 'copy'
+
+	input:
+	file reads from trimmed_paired_reads.collect()
+	file index from bwa_index
+	file fasta from fasta_file
+	file config from outbreaker_config_file
+
+	output:
+	file "outbreaker_results" into outbreaker_results
+
+	script:
+	"""
+	run_outbreak_wgs.sh $config
+	"""
+
+	}
 }
 
 

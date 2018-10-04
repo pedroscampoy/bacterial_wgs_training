@@ -41,6 +41,8 @@ From: centos:latest
     scif install /opt/gethomologues_v3.1.4_centos7.scif && \
     echo "Installing srst2 app" && \
     scif install /opt/srst2_v0.2.0_centos7.scif && \
+    echo "Installing Unicycler app" && \
+    scif install /opt/unicycler_v0.4.7_centos7.scif && \
     echo "Installing plasmidID app" && \
     scif install /opt/plasmidid_v1.4.1_centos7.scif
 
