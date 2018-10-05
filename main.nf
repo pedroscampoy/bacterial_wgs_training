@@ -66,6 +66,11 @@ def helpMessage() {
     Trimming options
       --notrim                      Specifying --notrim will skip the adapter trimming step.
       --saveTrimmed                 Save the trimmed Fastq files in the the Results directory.
+      --trimmomatic_adapters_file   Adapters index for adapter removal
+      --trimmomatic_adapters_parameters Trimming parameters for adapters. <seed mismatches>:<palindrome clip threshold>:<simple clip threshold>. Default 2:30:10
+      --trimmomatic_window_length   Window size. Defult 4
+      --trimmomatic_window_value    Window average quality requiered. Default 20
+      --trimmomatic_mininum_length  Minimum length of reads
 
     Assembly options
 
@@ -147,6 +152,33 @@ params.saveAlignedIntermediates = false
 
 // Default trimming options
 trimmomatic_path = "/scif/apps/trimmomatic/Trimmomatic-0.38"
+
+// Trimmomatic configuration optional parameters
+if( params.trimmomatic_adapters_file ){
+    trimmomatic_adapters_file = params.trimmomatic_adapters_file
+} else {
+    trimmomatic_adapters_file = "$trimmomatic_path/adapters/NexteraPE-PE.fa"
+}
+if( params.trimmomatic_adapters_parameters ){
+    trimmomatic_adapters_parameters = params.trimmomatic_adapters_parameters
+} else {
+    trimmomatic_adapters_parameters = "2:30:10"
+}
+if( params.trimmomatic_window_length ){
+    trimmomatic_window_length = params.trimmomatic_window_length
+} else {
+    trimmomatic_window_length = "4"
+}
+if( params.trimmomatic_window_value ){
+    trimmomatic_window_value = params.trimmomatic_window_value
+} else {
+    trimmomatic_window_value = "20"
+}
+if( params.trimmomatic_mininum_length ){
+    trimmomatic_mininum_length = params.trimmomatic_mininum_length
+} else {
+    trimmomatic_mininum_length = "50"
+}
 
 // SingleEnd option
 params.singleEnd = false
@@ -290,7 +322,7 @@ if (params.step =~ /(preprocessing|mapping|assembly|outbreakSNP|outbreakMLST)/ )
 
 		script:
 		"""
-		trimmomatic PE -phred33 $reads $name"_R1_paired.fastq" $name"_R1_unpaired.fastq" $name"_R2_paired.fastq" $name"_R2_unpaired.fastq" ILLUMINACLIP:$trimmomatic_path/adapters/NexteraPE-PE.fa:2:30:10 SLIDINGWINDOW:4:20 MINLEN:50 2>&1 > $name".log"
+		trimmomatic PE -phred33 $reads $name"_R1_paired.fastq" $name"_R1_unpaired.fastq" $name"_R2_paired.fastq" $name"_R2_unpaired.fastq" ILLUMINACLIP:${trimmomatic_adapters_file}:${trimmomatic_adapters_parameters} SLIDINGWINDOW:${trimmomatic_window_length}:${trimmomatic_window_value} MINLEN:${trimmomatic_mininum_length} 2>&1 > $name".log"
 
 		gzip *.fastq
 
