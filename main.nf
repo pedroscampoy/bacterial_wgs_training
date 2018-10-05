@@ -182,6 +182,18 @@ if( params.trimmomatic_mininum_length ){
     trimmomatic_mininum_length = "50"
 }
 
+// PlasmidID parameters
+if( ! params.plasmidid_database && params.step =~ /PlasmidID/ ){
+    exit 1, "PlasmidID database file must be declared with -d /path/to/database.fasta"
+}
+if( params.plasmidid_database && params.step =~ /PlasmidID/ ){
+    plasmidid_database = file(params.plasmidid_database)
+    if( !plasmidid_database.exists() ) exit 1, "PlasmidID database file not found: ${params.plasmidid_database}."
+}
+if( params.plasmidid_options ){
+    plasmidid_options = params.plasmidid_options
+}
+
 // SingleEnd option
 params.singleEnd = false
 
@@ -285,7 +297,7 @@ if(!params.bwa_index && fasta_file){
 /*
  * STEP 1.1 - FastQC
  */
-if (params.step =~ /(preprocessing|mapping|assembly|outbreakSNP|outbreakMLST)/ ){
+if (params.step =~ /(preprocessing|mapping|assembly|outbreakSNP|outbreakMLST|PlasmidID)/ ){
 	process fastqc {
 		tag "$name"
 		publishDir "${params.outdir}/fastqc", mode: 'copy',
@@ -605,6 +617,32 @@ if (params.step =~ /mapping/){
 if (params.step =~ /assembly/){
 	Channel.empty().set { samtools_stats }
 	Channel.empty().set { picard_reports }
+}
+
+/*
+ * STEP 9 PlasmidID
+ */
+if (params.step =~ /PlasmidID/){
+
+ process plasmidid {
+     tag "PlasmidID"
+     publishDir "${params.outdir}/PlasmidID", mode 'copy'
+     
+     input:
+     set file(readsR1),file(readsR2) from trimmed_paired_reads
+     
+     output:
+     file *.zip into plasmidid_results
+     
+     script:
+     prefix = readsR1.toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_paired)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
+     """
+     /scif/apps/plasmidid/bin/plasmidID.sh -1 $readsR1 -2 $readsR2 -d $plasmidid_database -s s$prefix --no-trim $plasmidid_options
+     
+     for folder in *; do zip $folder; done
+     """
+ }
+
 }
 
 /*
