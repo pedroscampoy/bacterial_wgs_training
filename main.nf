@@ -33,8 +33,10 @@ Pipeline overview:
  - 8. : Comparative Genomics
  	- Get homologues
  	- Artemis
- - 9. : MultiQC
- - 10. : Output Description HTML
+ - 9. : PlasmidID
+ - 10.: SRST2
+ - 11. : MultiQC
+ - 12. : Output Description HTML
  ----------------------------------------------------------------------------------------
 */
 
@@ -290,7 +292,7 @@ if (params.step =~ /(preprocessing|mapping|assembly|outbreakSNP|outbreakMLST)/ )
 
 		script:
 		"""
-		trimmomatic PE -phred33 $reads $name"_R1_paired.fastq" $name"_R1_unpaired.fastq" $name"_R2_paired.fastq" $name"_R2_unpaired.fastq" ILLUMINACLIP:$trimmomatic_path/adapters/NexteraPE-PE.fa:2:30:10 SLIDINGWINDOW:4:20 MINLEN:50 2>&1 > $name".log"
+		trimmomatic PE -phred33 $reads $name"_R1_paired.fastq" $name"_R1_unpaired.fastq" $name"_R2_paired.fastq" $name"_R2_unpaired.fastq" ILLUMINACLIP:$trimmomatic_path/adapters/NexteraPE-PE.fa:2:30:10 SLIDINGWINDOW:4:20 MINLEN:50  &> $name".log"
 
 		gzip *.fastq
 
