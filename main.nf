@@ -646,6 +646,29 @@ if (params.step =~ /PlasmidID/){
 }
 
 /*
+ * STEP 10 SRST2
+ */
+ 
+if (params.step =~ /srst2/){
+ 
+  preocess srst2 {
+  tag "SRST2"
+  publishDir "${params.outdir}/SRST2", mode 'copy'
+  
+  input:
+  
+  
+  output:
+  
+  script:
+  """
+  
+  """
+ }
+ 
+}
+
+/*
  * STEP 11 MultiQC
  */
 
