@@ -34,7 +34,7 @@ Pipeline overview:
  	- Get homologues
  	- Artemis
  - 9. : PlasmidID
- - 10.: SRST2
+ - 10. : SRST2
  - 11. : MultiQC
  - 12. : Output Description HTML
  ----------------------------------------------------------------------------------------
@@ -513,7 +513,9 @@ if (params.step =~ /mapping/){
 	}
 }
 
-
+	/*
+	* STEP 5 Assembly
+	*/
 if (params.step =~ /assembly/){
 
 	process spades {
