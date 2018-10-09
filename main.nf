@@ -53,14 +53,15 @@ def helpMessage() {
 
     Mandatory arguments:
       --reads                       Path to input data (must be surrounded with quotes).
+      --fasta                       Path to Fasta reference
 
     References
-      --fasta                       Path to Fasta reference (Mandatory if not --genome supplied)
-      --bwa_index                   Path to BWA index (Mandatory if not --genome supplied)
-      --gtf							Path to GTF reference file.
+      --bwa_index                   Path to BWA index
+      --gtf							Path to GTF reference file. (Mandatory if step = assembly)
+      --saveReference				Save reference file and indexes.
 
 	Steps available:
-	  --step [str]					Select which step to perform (preprocessing|mapping|assembly|outbreakSNP|outbreakMLST)
+	  --step [str]					Select which step to perform (preprocessing|mapping|assembly|outbreakSNP|outbreakMLST|plasmidID|strainCharacterization)
 
     Options:
       --singleEnd                   Specifies that the input is single end reads
@@ -70,19 +71,21 @@ def helpMessage() {
       --saveTrimmed                 Save the trimmed Fastq files in the the Results directory.
       --trimmomatic_adapters_file   Adapters index for adapter removal
       --trimmomatic_adapters_parameters Trimming parameters for adapters. <seed mismatches>:<palindrome clip threshold>:<simple clip threshold>. Default 2:30:10
-      --trimmomatic_window_length   Window size. Defult 4
+      --trimmomatic_window_length   Window size. Default 4
       --trimmomatic_window_value    Window average quality requiered. Default 20
       --trimmomatic_mininum_length  Minimum length of reads
 
     Assembly options
 
     Mapping options
+	  --keepduplicates				Keep duplicate reads. Picard MarkDuplicates step skipped.
+	  --saveAlignedIntermediates	Save intermediate bam files.
 
     PlasmidID options
       --plasmidid_database          Plasmids database
       --plasmidid_options           Command line options for PlasmidID
 
-    SRST2 options
+    Strain Characterization options
       --srst2_resistance            Fasta file/s for gene resistance databases
       --srst2_db                    Fasta file of MLST alleles
       --srst2_def                   ST definitions for MLST scheme
@@ -168,56 +171,17 @@ params.saveTrimmed = false
 params.saveAlignedIntermediates = false
 
 // Default trimming options
-trimmomatic_path = "/scif/apps/trimmomatic/Trimmomatic-0.38"
+trimmomatic_adapters_file = "$trimmomatic_path/adapters/NexteraPE-PE.fa"
+trimmomatic_adapters_parameters = "2:30:10"
+trimmomatic_window_length = "4"
+trimmomatic_window_value = "20"
+trimmomatic_mininum_length = "50"
 
-// Trimmomatic configuration optional parameters
-if( params.trimmomatic_adapters_file ){
-    trimmomatic_adapters_file = params.trimmomatic_adapters_file
-} else {
-    trimmomatic_adapters_file = "$trimmomatic_path/adapters/NexteraPE-PE.fa"
-}
-if( params.trimmomatic_adapters_parameters ){
-    trimmomatic_adapters_parameters = params.trimmomatic_adapters_parameters
-} else {
-    trimmomatic_adapters_parameters = "2:30:10"
-}
-if( params.trimmomatic_window_length ){
-    trimmomatic_window_length = params.trimmomatic_window_length
-} else {
-    trimmomatic_window_length = "4"
-}
-if( params.trimmomatic_window_value ){
-    trimmomatic_window_value = params.trimmomatic_window_value
-} else {
-    trimmomatic_window_value = "20"
-}
-if( params.trimmomatic_mininum_length ){
-    trimmomatic_mininum_length = params.trimmomatic_mininum_length
-} else {
-    trimmomatic_mininum_length = "50"
-}
 
 // PlasmidID parameters
-if( ! params.plasmidid_database && params.step =~ /PlasmidID/ ){
-    exit 1, "PlasmidID database file must be declared with -d /path/to/database.fasta"
-}
 if( params.plasmidid_database && params.step =~ /PlasmidID/ ){
     plasmidid_database = file(params.plasmidid_database)
     if( !plasmidid_database.exists() ) exit 1, "PlasmidID database file not found: ${params.plasmidid_database}."
-}
-if( params.plasmidid_options ){
-    plasmidid_options = params.plasmidid_options
-}
-
-// SRST2 parameters
-if( params.srst2_resistance ){
-    srst2_resistance = params.srst2_resistance
-}
-if( params.srst2_db ){
-    srst2_db = params.srst2_db
-}
-if( params.srst2_def ){
-    srst2_def = params.srst2_def
 }
 
 // SingleEnd option
@@ -226,6 +190,17 @@ params.singleEnd = false
 // Validate  mandatory inputs
 if( ! params.fasta ) exit 1, "Missing Reference genome: '$params.fasta'. Specify path with --fasta"
 
+if (step =~ /assembly/ && ! params.gtf ){
+    exit 1, "GTF file not provided for assembly step, please declare it with --gtf /path/to/gtf_file"
+}
+
+if( ! params.plasmidid_database && params.step =~ /PlasmidID/ ){
+    exit 1, "PlasmidID database file must be declared with --plasmidid_database /path/to/database.fasta"
+}
+
+if( ! params.outbreaker_config && params.step =~ /outbreakSNP/ ){
+    exit 1, "WGS-Outbreaker config file not provided for outbreakSNP step, please declare it with --outbreaker_config /path/to/config.file."
+}
 
 /*
  * Create channel for input files
@@ -271,10 +246,11 @@ summary['Save Intermeds']      = params.saveAlignedIntermediates
 if( params.notrim ){
     summary['Trimming Step'] = 'Skipped'
 } else {
-    summary['Trim R1'] = params.clip_r1
-    summary['Trim R2'] = params.clip_r2
-    summary["Trim 3' R1"] = params.three_prime_clip_r1
-    summary["Trim 3' R2"] = params.three_prime_clip_r2
+    summary['Trimmomatic adapters file'] = params.trimmomatic_adapters_file
+    summary['Trimmomatic adapters parameters'] = params.trimmomatic_adapters_parameters
+    summary["Trimmomatic window length"] = params.trimmomatic_window_length
+    summary["Trimmomatic window value"] = params.trimmomatic_window_value
+    summary["Trimmomatic minimum length"] = params.trimmomatic_mininum_length
 }
 summary['Config Profile'] = workflow.profile
 log.info summary.collect { k,v -> "${k.padRight(21)}: $v" }.join("\n")
@@ -524,27 +500,7 @@ if (params.step =~ /mapping/){
 	*/
 if (params.step =~ /assembly/){
 
-	process spades {
-		tag "$prefix"
-		publishDir path: { "${params.outdir}/spades" }, mode: 'copy'
-
-		input:
-		set file(readsR1),file(readsR2) from trimmed_paired_reads
-
-		output:
-		file "${prefix}_scaffolds.fasta" into scaffold_quast,scaffold_prokka
-		file "${prefix}_contigs.fasta" into contigs_quast,contigs_prokka
-
-		script:
-		prefix = readsR1.toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_paired)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
-		"""
-		spades.py --phred-offset 33 --only-assembler -1 $readsR1 -2 $readsR2 -o .
-		mv scaffolds.fasta $prefix"_scaffolds.fasta"
-		mv contigs.fasta $prefix"_contigs.fasta"
-		"""
-	}
-
-//	process pilon {
+//	process spades {
 //		tag "$prefix"
 //		publishDir path: { "${params.outdir}/spades" }, mode: 'copy'
 //
@@ -558,9 +514,29 @@ if (params.step =~ /assembly/){
 //		script:
 //		prefix = readsR1.toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_paired)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
 //		"""
-//		java -Xmx10G -jar pilon-1.22.jar --genome "../05-assembly/"$sample"/scaffolds.fasta" --bam $sample"/"$sample".sorted.bam" --output $sample"/"$sample --changes
+//		spades.py --phred-offset 33 --only-assembler -1 $readsR1 -2 $readsR2 -o .
+//		mv scaffolds.fasta $prefix"_scaffolds.fasta"
+//		mv contigs.fasta $prefix"_contigs.fasta"
 //		"""
 //	}
+
+	process unicycler {
+		tag "$prefix"
+		publishDir path: { "${params.outdir}/unicycler" }, mode: 'copy'
+
+		input:
+		set file(readsR1),file(readsR2) from trimmed_paired_reads
+
+		output:
+		file "${prefix}_assembly.fasta" into scaffold_quast,scaffold_prokka
+
+		script:
+		prefix = readsR1.toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_paired)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
+		"""
+		unicycler -1 $readsR1 -2 $readsR2 --pilon_path \$PILON_PATH -o .
+		mv assembly.fasta $prefix"_assembly.fasta"
+		"""
+	}
 
 	process quast {
 		tag "$prefix"
@@ -684,7 +660,7 @@ if (params.step =~ /PlasmidID/){
  * STEP 10 SRST2
  */
 
-if (params.step =~ /srst2/){
+if (params.step =~ /strainCharacterization/){
 
   preocess srst2 {
   tag "SRST2"
@@ -694,7 +670,7 @@ if (params.step =~ /srst2/){
   set file(readsR1),file(readsR2) from trimmed_paired_reads
 
   output:
-  file *results.txt into srst2_results
+  file "*results.txt" into srst2_results
 
   script:
   prefix = readsR1.toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_paired)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
