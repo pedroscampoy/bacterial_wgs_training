@@ -34,7 +34,7 @@ Pipeline overview:
  	- Get homologues
  	- Artemis
  - 9. : PlasmidID
- - 10.: SRST2
+ - 10. : SRST2
  - 11. : MultiQC
  - 12. : Output Description HTML
  ----------------------------------------------------------------------------------------
@@ -77,6 +77,15 @@ def helpMessage() {
     Assembly options
 
     Mapping options
+
+    PlasmidID options
+      --plasmidid_database          Plasmids database
+      --plasmidid_options           Command line options for PlasmidID
+
+    SRST2 options
+      --srst2_resistance            Fasta file/s for gene resistance databases
+      --srst2_db                    Fasta file of MLST alleles
+      --srst2_def                   ST definitions for MLST scheme
 
     OutbreakSNP options
       --outbreaker_config			Config needed by wgs-outbreaker.
@@ -200,6 +209,17 @@ if( params.plasmidid_options ){
     plasmidid_options = params.plasmidid_options
 }
 
+// SRST2 parameters
+if( params.srst2_resistance ){
+    srst2_resistance = params.srst2_resistance
+}
+if( params.srst2_db ){
+    srst2_db = params.srst2_db
+}
+if( params.srst2_def ){
+    srst2_def = params.srst2_def
+}
+
 // SingleEnd option
 params.singleEnd = false
 
@@ -303,7 +323,7 @@ if(!params.bwa_index && fasta_file){
 /*
  * STEP 1.1 - FastQC
  */
-if (params.step =~ /(preprocessing|mapping|assembly|outbreakSNP|outbreakMLST|PlasmidID)/ ){
+if (params.step =~ /(preprocessing|mapping|assembly|outbreakSNP|outbreakMLST|PlasmidID|srst2)/ ){
 	process fastqc {
 		tag "$name"
 		publishDir "${params.outdir}/fastqc", mode: 'copy',
@@ -499,7 +519,9 @@ if (params.step =~ /mapping/){
 	}
 }
 
-
+	/*
+	* STEP 5 Assembly
+	*/
 if (params.step =~ /assembly/){
 
 	process spades {
@@ -650,10 +672,35 @@ if (params.step =~ /PlasmidID/){
      script:
      prefix = readsR1.toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_paired)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
      """
-     /scif/apps/plasmidid/bin/plasmidID.sh -1 $readsR1 -2 $readsR2 -d $plasmidid_database -s s$prefix --no-trim $plasmidid_options
+     /scif/apps/plasmidid/bin/plasmidID.sh -1 $readsR1 -2 $readsR2 -d $plasmidid_database -s $prefix --no-trim $plasmidid_options
 
      for folder in *; do zip $folder; done
      """
+ }
+
+}
+
+/*
+ * STEP 10 SRST2
+ */
+
+if (params.step =~ /srst2/){
+
+  preocess srst2 {
+  tag "SRST2"
+  publishDir "${params.outdir}/SRST2", mode 'copy'
+
+  input:
+  set file(readsR1),file(readsR2) from trimmed_paired_reads
+
+  output:
+  file *results.txt into srst2_results
+
+  script:
+  prefix = readsR1.toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_paired)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
+  """
+  srst2 --input_pe $readsR1 $readsR2 --output $prefix --log --gene_db $srst2_resistance --mlst_db $srst2_db --mlst_definitions $srst2_def
+  """
  }
 
 }
