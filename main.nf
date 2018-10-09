@@ -129,6 +129,12 @@ if( params.gtf ){
     if( !gtf_file.exists() ) exit 1, "GTF file not found: ${params.gtf}."
 }
 
+// WGS-Outbreaker config
+params.outbreaker_config = false
+if ( params.outbreaker_config ){
+	outbreaker_config_file = file(params.outbreaker_config)
+	if ( !outbreaker_config_file.exists() ) exit 1, "WGS-Outbreaker config file not found: ${params.outbreaker_config}"
+}
 // Steps
 params.step = "preprocessing"
 
@@ -590,6 +596,7 @@ if (params.step =~ /outbreakSNP/){
 
 	output:
 	file "outbreaker_results" into outbreaker_results
+	file "outbreaker_results/Alignment" into picard_reports
 
 	script:
 	"""
@@ -619,6 +626,12 @@ if (params.step =~ /assembly/){
 	Channel.empty().set { picard_reports }
 }
 
+if (params.step =~ /outbreakSNP/){
+	Channel.empty().set { samtools_stats }
+	Channel.empty().set { prokka_multiqc }
+	Channel.empty().set { quast_multiqc }
+}
+
 /*
  * STEP 9 PlasmidID
  */
@@ -627,18 +640,18 @@ if (params.step =~ /PlasmidID/){
  process plasmidid {
      tag "PlasmidID"
      publishDir "${params.outdir}/PlasmidID", mode 'copy'
-     
+
      input:
      set file(readsR1),file(readsR2) from trimmed_paired_reads
-     
+
      output:
      file *.zip into plasmidid_results
-     
+
      script:
      prefix = readsR1.toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_paired)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
      """
      /scif/apps/plasmidid/bin/plasmidID.sh -1 $readsR1 -2 $readsR2 -d $plasmidid_database -s s$prefix --no-trim $plasmidid_options
-     
+
      for folder in *; do zip $folder; done
      """
  }
