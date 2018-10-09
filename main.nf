@@ -105,7 +105,7 @@ def helpMessage() {
 // Pipeline version
 version = '1.0'
 
-// Show help emssage
+// Show help message
 params.help = false
 if (params.help){
     helpMessage()
@@ -681,7 +681,7 @@ if (params.step =~ /srst2/){
   set file(readsR1),file(readsR2) from trimmed_paired_reads
   
   output:
-  file *results.txt into srst2_results
+  file '*results.txt' into srst2_results
   
   script:
   prefix = readsR1.toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_paired)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
