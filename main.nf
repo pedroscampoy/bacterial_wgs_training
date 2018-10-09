@@ -73,20 +73,20 @@ def helpMessage() {
       --trimmomatic_window_length   Window size. Defult 4
       --trimmomatic_window_value    Window average quality requiered. Default 20
       --trimmomatic_mininum_length  Minimum length of reads
-    
+
     Assembly options
-    
+
     Mapping options
-    
+
     PlasmidID options
       --plasmidid_database          Plasmids database
       --plasmidid_options           Command line options for PlasmidID
-    
+
     SRST2 options
       --srst2_resistance            Fasta file/s for gene resistance databases
       --srst2_db                    Fasta file of MLST alleles
       --srst2_def                   ST definitions for MLST scheme
-    
+
     OutbreakSNP options
       --outbreaker_config			Config needed by wgs-outbreaker.
 
@@ -138,6 +138,12 @@ if( params.gtf ){
     if( !gtf_file.exists() ) exit 1, "GTF file not found: ${params.gtf}."
 }
 
+// WGS-Outbreaker config
+params.outbreaker_config = false
+if ( params.outbreaker_config ){
+	outbreaker_config_file = file(params.outbreaker_config)
+	if ( !outbreaker_config_file.exists() ) exit 1, "WGS-Outbreaker config file not found: ${params.outbreaker_config}"
+}
 // Steps
 params.step = "preprocessing"
 
@@ -612,6 +618,7 @@ if (params.step =~ /outbreakSNP/){
 
 	output:
 	file "outbreaker_results" into outbreaker_results
+	file "outbreaker_results/Alignment" into picard_reports
 
 	script:
 	"""
@@ -641,6 +648,12 @@ if (params.step =~ /assembly/){
 	Channel.empty().set { picard_reports }
 }
 
+if (params.step =~ /outbreakSNP/){
+	Channel.empty().set { samtools_stats }
+	Channel.empty().set { prokka_multiqc }
+	Channel.empty().set { quast_multiqc }
+}
+
 /*
  * STEP 9 PlasmidID
  */
@@ -649,18 +662,18 @@ if (params.step =~ /PlasmidID/){
  process plasmidid {
      tag "PlasmidID"
      publishDir "${params.outdir}/PlasmidID", mode 'copy'
-     
+
      input:
      set file(readsR1),file(readsR2) from trimmed_paired_reads
-     
+
      output:
      file *.zip into plasmidid_results
-     
+
      script:
      prefix = readsR1.toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_paired)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
      """
      /scif/apps/plasmidid/bin/plasmidID.sh -1 $readsR1 -2 $readsR2 -d $plasmidid_database -s $prefix --no-trim $plasmidid_options
-     
+
      for folder in *; do zip $folder; done
      """
  }
@@ -670,16 +683,16 @@ if (params.step =~ /PlasmidID/){
 /*
  * STEP 10 SRST2
  */
- 
+
 if (params.step =~ /srst2/){
- 
+
   preocess srst2 {
   tag "SRST2"
   publishDir "${params.outdir}/SRST2", mode 'copy'
-  
+
   input:
   set file(readsR1),file(readsR2) from trimmed_paired_reads
-  
+
   output:
   file '*results.txt' into srst2_results
   
@@ -689,7 +702,7 @@ if (params.step =~ /srst2/){
   srst2 --input_pe $readsR1 $readsR2 --output $prefix --log --gene_db $srst2_resistance --mlst_db $srst2_db --mlst_definitions $srst2_def
   """
  }
- 
+
 }
 
 /*
