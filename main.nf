@@ -119,7 +119,7 @@ if (params.help){
  * Default and custom value for configurable variables
  */
 
-
+params.fasta = false
 if( params.fasta ){
     fasta_file = file(params.fasta)
     if( !fasta_file.exists() ) exit 1, "Fasta file not found: ${params.fasta}."
@@ -143,12 +143,15 @@ if( params.gtf ){
 
 // WGS-Outbreaker config
 params.outbreaker_config = false
-if ( params.outbreaker_config ){
+if ( params.outbreaker_config )
 	outbreaker_config_file = file(params.outbreaker_config)
 	if ( !outbreaker_config_file.exists() ) exit 1, "WGS-Outbreaker config file not found: ${params.outbreaker_config}"
 }
 // Steps
 params.step = "preprocessing"
+if ( ! (params.step =~ /(preprocessing|mapping|assembly|plasmidID|outbreakSNP|outbreakMLST|strainCharacterization)/) ) {
+	exit 1, 'Please provide a valid --step option [preprocessing,mapping,assembly,plasmidID,outbreakSNP,outbreakMLST,strainCharacterization]'
+}
 
 // Mapping-duplicates defaults
 params.keepduplicates = false
@@ -171,14 +174,31 @@ params.saveTrimmed = false
 params.saveAlignedIntermediates = false
 
 // Default trimming options
-trimmomatic_adapters_file = "$trimmomatic_path/adapters/NexteraPE-PE.fa"
-trimmomatic_adapters_parameters = "2:30:10"
-trimmomatic_window_length = "4"
-trimmomatic_window_value = "20"
-trimmomatic_mininum_length = "50"
+params.trimmomatic_adapters_file = "\$TRIMMOMATIC_PATH/adapters/NexteraPE-PE.fa"
+params.trimmomatic_adapters_parameters = "2:30:10"
+params.trimmomatic_window_length = "4"
+params.trimmomatic_window_value = "20"
+params.trimmomatic_mininum_length = "50"
 
+//srst2
+params.srst2_db = false
+if ( params.srst2_db )
+	srst2_db = file(params.srst2_db)
+	if ( !srst2_db.exists() ) exit 1, "SRST2 db file not found: ${params.srst2_db}"
+}
+params.srst2_def = false
+if ( params.srst2_def )
+	srst2_def = file(params.srst2_def)
+	if ( !srst2_def.exists() ) exit 1, "SRST2 mlst definitions file not found: ${params.srst2_def}"
+}
+params.srst2_resistance = false
+if ( params.srst2_resistance )
+	srst2_db = file(params.srst2_resistance)
+	if ( !srst2_resistance.exists() ) exit 1, "SRST2 resistance database not found: ${params.srst2_resistance}"
+}
 
 // PlasmidID parameters
+params.plasmidid_database = false
 if( params.plasmidid_database && params.step =~ /PlasmidID/ ){
     plasmidid_database = file(params.plasmidid_database)
     if( !plasmidid_database.exists() ) exit 1, "PlasmidID database file not found: ${params.plasmidid_database}."
@@ -188,9 +208,12 @@ if( params.plasmidid_database && params.step =~ /PlasmidID/ ){
 params.singleEnd = false
 
 // Validate  mandatory inputs
+params.reads = false
+if (! params.reads ) exit 1, "Missing reads: $params.reads. Specify path with --reads"
+
 if( ! params.fasta ) exit 1, "Missing Reference genome: '$params.fasta'. Specify path with --fasta"
 
-if (step =~ /assembly/ && ! params.gtf ){
+if (params.step =~ /assembly/ && ! params.gtf ){
     exit 1, "GTF file not provided for assembly step, please declare it with --gtf /path/to/gtf_file"
 }
 
@@ -200,6 +223,18 @@ if( ! params.plasmidid_database && params.step =~ /PlasmidID/ ){
 
 if( ! params.outbreaker_config && params.step =~ /outbreakSNP/ ){
     exit 1, "WGS-Outbreaker config file not provided for outbreakSNP step, please declare it with --outbreaker_config /path/to/config.file."
+}
+
+if( ! params.srst2_db && params.step =~ /strainCharacterization/ ){
+    exit 1, "SRST2 allele mlst database not provided for strainCharacterization step, please declare it with --srst2_db /path/to/db."
+}
+
+if( ! params.srst2_def && params.step =~ /strainCharacterization/ ){
+    exit 1, "SRST2 mlst schema definitions not provided for strainCharacterization step, please declare it with --srst2_def /path/to/db."
+}
+
+if( ! params.srst2_resistance && params.step =~ /strainCharacterization/ ){
+    exit 1, "SRST2 resistance database not provided for strainCharacterization step, please declare it with --srst2_resistance /path/to/db."
 }
 
 /*
@@ -299,7 +334,7 @@ if(!params.bwa_index && fasta_file){
 /*
  * STEP 1.1 - FastQC
  */
-if (params.step =~ /(preprocessing|mapping|assembly|outbreakSNP|outbreakMLST|PlasmidID|srst2)/ ){
+if (params.step =~ /(preprocessing|mapping|assembly|outbreakSNP|outbreakMLST|PlasmidID|strainCharacterization)/ ){
 	process fastqc {
 		tag "$name"
 		publishDir "${params.outdir}/fastqc", mode: 'copy',
@@ -338,7 +373,7 @@ if (params.step =~ /(preprocessing|mapping|assembly|outbreakSNP|outbreakMLST|Pla
 
 		script:
 		"""
-		trimmomatic PE -phred33 $reads $name"_R1_paired.fastq" $name"_R1_unpaired.fastq" $name"_R2_paired.fastq" $name"_R2_unpaired.fastq" ILLUMINACLIP:${trimmomatic_adapters_file}:${trimmomatic_adapters_parameters} SLIDINGWINDOW:${trimmomatic_window_length}:${trimmomatic_window_value} MINLEN:${trimmomatic_mininum_length} 2>&1 > $name".log"
+		trimmomatic PE -phred33 $reads $name"_R1_paired.fastq" $name"_R1_unpaired.fastq" $name"_R2_paired.fastq" $name"_R2_unpaired.fastq" ILLUMINACLIP:${params.trimmomatic_adapters_file}:${params.trimmomatic_adapters_parameters} SLIDINGWINDOW:${params.trimmomatic_window_length}:${params.trimmomatic_window_value} MINLEN:${params.trimmomatic_mininum_length} 2>&1 > $name".log"
 
 		gzip *.fastq
 
@@ -498,7 +533,7 @@ if (params.step =~ /mapping/){
 	/*
 	* STEP 5 Assembly
 	*/
-if (params.step =~ /assembly/){
+if (params.step =~ /assembly | plasmidID/){
 
 //	process spades {
 //		tag "$prefix"
@@ -528,7 +563,7 @@ if (params.step =~ /assembly/){
 		set file(readsR1),file(readsR2) from trimmed_paired_reads
 
 		output:
-		file "${prefix}_assembly.fasta" into scaffold_quast,scaffold_prokka
+		file "${prefix}_assembly.fasta" into scaffold_quast,scaffold_prokka,scaffold_plasmidid
 
 		script:
 		prefix = readsR1.toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_paired)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
@@ -541,7 +576,7 @@ if (params.step =~ /assembly/){
 	process quast {
 		tag "$prefix"
 		publishDir path: {"${params.outdir}/quast"}, mode: 'copy',
-							saveAs: { filename -> "${prefix}_quast_results"}
+							saveAs: { filename -> if(filename == "quast_results") "${prefix}_quast_results"}
 
 		input:
 		file scaffold from scaffold_quast
@@ -641,16 +676,15 @@ if (params.step =~ /PlasmidID/){
 
      input:
      set file(readsR1),file(readsR2) from trimmed_paired_reads
+     file assembly from scaffold_plasmidid
 
      output:
-     file *.zip into plasmidid_results
+     file "plasmidid_results" into plasmidid_results
 
      script:
      prefix = readsR1.toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_paired)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
      """
-     /scif/apps/plasmidid/bin/plasmidID.sh -1 $readsR1 -2 $readsR2 -d $plasmidid_database -s $prefix --no-trim $plasmidid_options
-
-     for folder in *; do zip $folder; done
+     plasmidID.sh -1 $readsR1 -2 $readsR2 -d $plasmidid_database -s $prefix --no-trim -c $assembly -o plasmidid_results
      """
  }
 
