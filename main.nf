@@ -199,7 +199,7 @@ if ( params.srst2_resistance ){
 
 // PlasmidID parameters
 params.plasmidid_database = false
-if( params.plasmidid_database && params.step =~ /PlasmidID/ ){
+if( params.plasmidid_database && params.step =~ /plasmidID/ ){
     plasmidid_database = file(params.plasmidid_database)
     if( !plasmidid_database.exists() ) exit 1, "PlasmidID database file not found: ${params.plasmidid_database}."
 }
@@ -217,7 +217,7 @@ if (params.step =~ /assembly/ && ! params.gtf ){
     exit 1, "GTF file not provided for assembly step, please declare it with --gtf /path/to/gtf_file"
 }
 
-if( ! params.plasmidid_database && params.step =~ /PlasmidID/ ){
+if( ! params.plasmidid_database && params.step =~ /plasmidID/ ){
     exit 1, "PlasmidID database file must be declared with --plasmidid_database /path/to/database.fasta"
 }
 
@@ -334,7 +334,7 @@ if(!params.bwa_index && fasta_file){
 /*
  * STEP 1.1 - FastQC
  */
-if (params.step =~ /(preprocessing|mapping|assembly|outbreakSNP|outbreakMLST|PlasmidID|strainCharacterization)/ ){
+if (params.step =~ /(preprocessing|mapping|assembly|outbreakSNP|outbreakMLST|plasmidID|strainCharacterization)/ ){
 	process fastqc {
 		tag "$name"
 		publishDir "${params.outdir}/fastqc", mode: 'copy',
