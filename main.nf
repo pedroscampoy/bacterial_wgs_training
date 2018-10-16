@@ -143,7 +143,7 @@ if( params.gtf ){
 
 // WGS-Outbreaker config
 params.outbreaker_config = false
-if ( params.outbreaker_config )
+if ( params.outbreaker_config ){
 	outbreaker_config_file = file(params.outbreaker_config)
 	if ( !outbreaker_config_file.exists() ) exit 1, "WGS-Outbreaker config file not found: ${params.outbreaker_config}"
 }
@@ -182,17 +182,17 @@ params.trimmomatic_mininum_length = "50"
 
 //srst2
 params.srst2_db = false
-if ( params.srst2_db )
+if ( params.srst2_db ){
 	srst2_db = file(params.srst2_db)
 	if ( !srst2_db.exists() ) exit 1, "SRST2 db file not found: ${params.srst2_db}"
 }
 params.srst2_def = false
-if ( params.srst2_def )
+if ( params.srst2_def ){
 	srst2_def = file(params.srst2_def)
 	if ( !srst2_def.exists() ) exit 1, "SRST2 mlst definitions file not found: ${params.srst2_def}"
 }
 params.srst2_resistance = false
-if ( params.srst2_resistance )
+if ( params.srst2_resistance ){
 	srst2_db = file(params.srst2_resistance)
 	if ( !srst2_resistance.exists() ) exit 1, "SRST2 resistance database not found: ${params.srst2_resistance}"
 }
@@ -533,7 +533,7 @@ if (params.step =~ /mapping/){
 	/*
 	* STEP 5 Assembly
 	*/
-if (params.step =~ /assembly | plasmidID/){
+if (params.step =~ /(assembly|plasmidID)/){
 
 //	process spades {
 //		tag "$prefix"
@@ -668,7 +668,7 @@ if (params.step =~ /outbreakSNP/){
 /*
  * STEP 9 PlasmidID
  */
-if (params.step =~ /PlasmidID/){
+if (params.step =~ /plasmidID/){
 
  process plasmidid {
      tag "PlasmidID"
@@ -696,20 +696,37 @@ if (params.step =~ /PlasmidID/){
 
 if (params.step =~ /strainCharacterization/){
 
-  preocess srst2 {
-  tag "SRST2"
-  publishDir "${params.outdir}/SRST2", mode 'copy'
+  process srst2_mlst {
+  tag "SRST2_DB"
+  publishDir "${params.outdir}/SRST2_MLST", mode 'copy'
 
   input:
   set file(readsR1),file(readsR2) from trimmed_paired_reads
 
   output:
-  file "*results.txt" into srst2_results
+  file "*results.txt" into srst2_mlst_results
 
   script:
   prefix = readsR1.toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_paired)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
   """
-  srst2 --input_pe $readsR1 $readsR2 --output $prefix --log --gene_db $srst2_resistance --mlst_db $srst2_db --mlst_definitions $srst2_def
+  srst2 --input_pe $readsR1 $readsR2 --output $prefix --log --mlst_db $srst2_db --mlst_definitions $srst2_def
+  """
+ }
+
+  process srst2_db {
+  tag "SRST2_DB"
+  publishDir "${params.outdir}/SRST2_DB", mode 'copy'
+
+  input:
+  set file(readsR1),file(readsR2) from trimmed_paired_reads
+
+  output:
+  file "*results.txt" into srst2_db_results
+
+  script:
+  prefix = readsR1.toString() - ~/(.R1)?(_1)?(_R1)?(_trimmed)?(_paired)?(_val_1)?(\.fq)?(\.fastq)?(\.gz)?$/
+  """
+  srst2 --input_pe $readsR1 $readsR2 --output $prefix --log --gene_db $srst2_resistance
   """
  }
 
