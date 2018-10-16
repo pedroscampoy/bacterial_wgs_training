@@ -18,4 +18,34 @@ Variant calling is a process with a bunch of potential error sources that may le
 
 <img src="https://github.com/BU-ISCIII/WGS-Outbreaker/blob/master/img/wgs_outbreaker_schema.png" width="600">
 
+## Preprocessing
+
+## Mapping
+
+## Variant Calling
+We are using WGS-Outbreaker as the main software for variant calling, SNP-matrix creation and phylogeny performance. Following the development of the former exercises we are using nextflow, in this case using `outbreakSNP` step.
+This step includes the following processes:
+- Preprocessing: 
+    - Trimming with trimmomatic software.
+    - Quality control with fastQC.
+- WGS-Outbreak software comprises the rest of steps:
+    - Mapping with bwa.
+    - Variant calling with GATK.
+    - SNP-Matrix creation.
+    - SNP-filtering:
+        * PhredQ > 30
+        * Strand-bias
+        * MAPQ
+        * SNP cluster, < 3 SNPs / 1000 pb
+        
+Everything clear..? So let's run it. 
+First of all we need to be clear in which folder we are. We need to be in our home directory `/home/alumno` and our training dataset downloaded the first day must be there.
+```
+$ ls
+
+
+```
+        
+        
+        
 
