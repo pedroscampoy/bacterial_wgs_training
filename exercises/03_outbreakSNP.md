@@ -1,4 +1,4 @@
-## Bacterial WGS training : Exercise 3
+# Bacterial WGS training : Exercise 3
 
 |**Title**| SNP-based bacterial outbreak investigation.|
 |---------|-------------------------------------------|
@@ -9,3 +9,7 @@
 |**Key points**:|<ul><li>Importance of reference selecion in SNP-based tipification.</li><li>Variant calling and SNP reconstruction is a key step in the process.</li><li>Interpretation of results is case, species and epidemiology dependant.</li></ul>|
   
 
+## Introduction
+Although scientific community efforts have been focused on assembly-based methods and the optimization of reconstructing complete genomes, variant calling is a essential procedure that allows per base comparison between different genomes ([Olson et al 2015](https://www.frontiersin.org/articles/10.3389/fgene.2015.00235/full)).
+
+SNP-based strain typing using WGS can be performed via reference-based mapping of either reads or assembled contigs. There are many available microbial SNP pipelines, such as [Snippy](https://github.com/tseemann/snippy), NASP, SNVphyl, CFSAN SNP Pipeline, or Lyve-SET
