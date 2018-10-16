@@ -15,31 +15,31 @@ Open a terminal and type into it. Remember to use TAB to autocomplete and sugges
 #### How do I navigate the file system?
 
 Let's remember the basics: `pwd cd ls mkdir mv rm rmdir less nano`. We are going to use those commands to:
-<li>Check our working directory: </li>
+Check our working directory:
 `pwd`
-<li>Move to our Desktop folder: </li>
+Move to our Desktop folder:
 `cd Desktop`
-<li>Create a directory called "myDir": </li>
+Create a directory called "myDir": 
 `mkdir myDir`
-<li>Move to the new folder: </li>
+Move to the new folder:
 `cd myDir`
-<li>Check our working directory: </li>
+Check our working directory:
 `pwd`
-<li>Create the folders "asdf", "AsDf", "ASDF" and "tmp":  </li>
+Create the folders "asdf", "AsDf", "ASDF" and "tmp": 
 `mkdir asdf AsDf ASDF tmp`
-<li>Create a file inside "tmp" called "myFile.txt": </li>
+Create a file inside "tmp" called "myFile.txt": 
 `nano tmp/myFile.txt` and write whatever you want.
-<li>Rename "myFile.txt" to "whateverIwant": </li>
+Rename "myFile.txt" to "whateverIwant":
 `mv tmp/myFile.txt whateverIwant`
-<li>See the contents of "whateverIwant": </li>
+See the contents of "whateverIwant": 
 `less tmp/whateverIwant`
-<li>Remove the folders inside "myDir": </li>
+Remove the folders inside "myDir": 
 `rmdir ./*`
-<li>Remove the file: </li>
+Remove the file: 
 `rm tmp/whateverIwant`
-<li>Go back to Desktop and remove everything you created: </li>
+Go back to Desktop and remove everything you created: 
 `cd ..; rm -rf tmp`
-<li>Return to your home directory: </li>
+Return to your home directory: 
 `cd`
 
 #### How do I know which software I am using?
