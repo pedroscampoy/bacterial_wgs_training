@@ -58,5 +58,12 @@ From: centos:latest
 		export CLASSPATH=~/scif/apps/gatk/gatk-3.8/GenomeAnalysisTK.jar:$CLASSPATH >> $SINGULARITY_ENVIRONMENT
 	fi
 
+	## R packages
+
+	# Install core R dependencies
+	echo "r <- getOption('repos'); r['CRAN'] <- 'https://ftp.acc.umu.se/mirror/CRAN/'; options(repos = r);" > ~/.Rprofile && \
+	Rscript -e "install.packages('ggplot2',dependencies=TRUE)" && \
+	Rscript -e "install.packages('plyr',dependencies=TRUE)"
+
 %runscript
     exec scif "$@"

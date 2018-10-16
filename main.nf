@@ -257,7 +257,7 @@ Channel
 
 // Header log info
 log.info "========================================="
-log.info " nf-core/ChIPseq: ChIP-Seq Best Practice v${version}"
+log.info " BU-ISCIII/bacterial_wgs_training : WGS analysis practice v${version}"
 log.info "========================================="
 def summary = [:]
 summary['Reads']               = params.reads
