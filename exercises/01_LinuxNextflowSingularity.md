@@ -15,32 +15,32 @@ Open a terminal and type into it. Remember to use TAB to autocomplete and sugges
 #### How do I navigate the file system?
 
 Let's remember the basics: `pwd cd ls mkdir mv rm rmdir less nano`. We are going to use those commands to:
-Check our working directory:
-`pwd`
-Move to our Desktop folder:
-`cd Desktop`
-Create a directory called "myDir": 
-`mkdir myDir`
-Move to the new folder:
-`cd myDir`
-Check our working directory:
-`pwd`
-Create the folders "asdf", "AsDf", "ASDF" and "tmp": 
-`mkdir asdf AsDf ASDF tmp`
-Create a file inside "tmp" called "myFile.txt": 
-`nano tmp/myFile.txt` and write whatever you want.
-Rename "myFile.txt" to "whateverIwant":
-`mv tmp/myFile.txt whateverIwant`
-See the contents of "whateverIwant": 
-`less tmp/whateverIwant`
-Remove the folders inside "myDir": 
-`rmdir ./*`
-Remove the file: 
-`rm tmp/whateverIwant`
-Go back to Desktop and remove everything you created: 
-`cd ..; rm -rf tmp`
-Return to your home directory: 
-`cd`
+
+Check our working directory: `pwd`
+
+Move to our Desktop folder: `cd Desktop`
+
+Create a directory called "myDir": `mkdir myDir`
+
+Move to the new folder: `cd myDir`
+
+Check our working directory: `pwd`
+
+Create the folders "asdf", "AsDf", "ASDF" and "tmp": `mkdir asdf AsDf ASDF tmp`
+
+Create a file inside "tmp" called "myFile.txt": `nano tmp/myFile.txt` and write whatever you want.
+
+Rename "myFile.txt" to "whateverIwant": `mv tmp/myFile.txt whateverIwant`
+
+See the contents of "whateverIwant": `less tmp/whateverIwant`
+
+Remove the folders inside "myDir": `rmdir ./*`
+
+Remove the file: `rm tmp/whateverIwant`
+
+Go back to Desktop and remove everything you created: `cd ..; rm -rf tmp`
+
+Return to your home directory: `cd`
 
 #### How do I know which software I am using?
 
