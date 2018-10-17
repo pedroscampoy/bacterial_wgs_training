@@ -8,6 +8,30 @@
 |**Time estimation**:| 1 h 30 min |
 |**Key points**:|<ul><li>Analysis of sequence quality.</li><li>Mapping.</li><li>Assembly.</li></ul>|
 
+## Training dataset description
+This dataset was used for [external quality assessment (EQA-5)](https://ecdc.europa.eu/en/publications-data/fifth-external-quality-assessment-scheme-listeria-monocytogenes-typing) scheme for typing of
+Listeria monocytogenes (L. monocytogenes) organised for laboratories providing data to the Food- and Waterborne
+Diseases and Zoonoses Network (FWD-Net) managed by ECDC. Since 2012, the Section for Foodborne Infections
+at the Statens Serum Institut (SSI) in Denmark has arranged this EQA under a framework contract with ECDC. The
+EQA-5 contain serotyping and molecular typing-based cluster analysis.
+
+Human listeriosis is a relatively rare but serious zoonotic disease with an EU notification rate of 0.47 cases per 100
+000 population in 2016. The number of human listeriosis cases in the EU has increased since 2008, with the
+highest annual number of deaths since 2009 reported in 2015 at 270.
+
+The objectives of the EQA are to assess the quality and comparability of the typing data reported by public health
+national reference laboratories participating in FWD-Net. Test isolates for the EQA were selected to cover isolates
+currently relevant to public health in Europe and represent a broad range of clinically relevant types for invasive
+listeriosis. Two separate sets of 11 test isolates were selected for serotyping and molecular typing-based cluster
+analysis. The expected cluster was based on a pre-defined categorisation by the organiser. 
+Twenty-two L. monocytogenes test isolates were selected to fulfil the following criteria:
+- cover a broad range of the common clinically relevant types for invasive listeriosis
+- include closely related isolates
+- remain stable during the preliminary test period at the organising laboratory.
+
+The 11 test isolates for cluster analysis were selected to include isolates with different or varying relatedness isolates and different multi locus sequence types.
+
+
 ## How do I know if my data was correctly sequenced?
 
 Despite the improvement of sequencing methods, there is no error-free technique. The Phred quality score (Ewing et al., 2005) has been used since the late 90s as a measure of the quality of each sequenced nucleotide. Phred quality scores not only allow us to determine the accuracy of sequencing and of each individual position in an assembled consensus sequence, but it is also used to compare the efficiency of the sequencing methods.
