@@ -46,7 +46,7 @@ Return to your home directory: `cd`
 
 Software may (and will) be installed in many different places. To discover the one you have loaded in your PATH use `which`, to see all the places where the shell is looking for software check the variable `$PATH`, to know the version of the software use the apropiate parameter (`-h --help -v --version`) and to check the manual of the software use `man`.
 
-```bash
+```
 which git
 echo $PATH
 git -h
