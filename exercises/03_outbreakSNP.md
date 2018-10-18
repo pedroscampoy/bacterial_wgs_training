@@ -39,13 +39,27 @@ This step includes the following processes:
         * SNP cluster, < 3 SNPs / 1000 pb
         
 Everything clear..? So let's run it. 
-First of all we need to be clear in which folder we are. We need to be in our home directory `/home/alumno` and our training dataset downloaded the first day must be there.
-```
+First of all we need to be clear in which folder we are. We need to be in our working directory `/home/alumno/Documents/wgs` and our training dataset downloaded the first day must be there (If you had any problem the previous sessions please refere to the [setup tutorial](00_SetUp.md)).
+
+```Bash
+$ pwd
+/home/alumno/Documents/wgs
 $ ls
-
-
+training_dataset results work
 ```
-        
-        
+
+Once our localization is correct we will launch nextflow with the next parameters:
+
+```Bash
+$ nextflow BU-ISCIII/bacterial_wgs_training run --reads 'training_dataset/downsampling_250K/*_R{1,2}.fastq.gz' \
+  --fasta training_dataset/listeria_NC_021827.1_NoPhagues.fna \
+  --step outbreakSNP \
+  -profile singularity \
+  --saveTrimmed \
+  --outbreaker_config training_dataset/outbreaker.config \
+  -resume
+```
+
+
         
 

@@ -36,7 +36,7 @@ Download git repository:
 git clone https://github.com/BU-ISCIII/bacterial_wgs_training.git
 ```
 
-Dowload training dataset:
+Download training dataset:
 
 ```
 wget https://github.com/BU-ISCIII/bacterial_wgs_training/releases/download/1.0/training_dataset_250k.tar.gz
