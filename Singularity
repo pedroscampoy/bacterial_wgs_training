@@ -6,7 +6,8 @@ From: centos:latest
 %post
 	echo "Install basic development tools"
 	yum -y groupinstall "Development Tools"
-	yum -y update && yum -y install wget curl
+	yum -y update && yum -y install wget curl openssl-devel geos-devel udunits2-devel libxml2-devel cairo-devel
+
 
 	echo "Install python2.7 setuptools and pip"
 	yum -y install python-setuptools
