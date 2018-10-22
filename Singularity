@@ -6,7 +6,7 @@ From: centos:latest
 %post
 	echo "Install basic development tools"
 	yum -y groupinstall "Development Tools"
-	yum -y update && yum -y install wget curl openssl-devel geos-devel udunits2-devel libxml2-devel cairo-devel
+	yum -y update && yum -y install wget curl openssl-devel geos-devel udunits2-devel libxml2-devel cairo-devel libgit2-devel
 
 
 	echo "Install python2.7 setuptools and pip"
@@ -45,8 +45,6 @@ From: centos:latest
     echo "Installing plasmidID app" && \
     scif install /opt/plasmidid_v1.4.1_centos7.scif
 
-
-
 	# Executables must be exported for nextflow, if you use their singularity native integration.
     # It would be cool to use $SCIF_APPBIN_bwa variable, but it must be set after PATH variable, because I tried to use it here and in %environment without success.
     find /scif/apps -maxdepth 2 -name "bin" | while read in; do echo "export PATH=\${PATH}:$in" >> $SINGULARITY_ENVIRONMENT;done
@@ -63,8 +61,8 @@ From: centos:latest
 
 	# Install core R dependencies
 	echo "r <- getOption('repos'); r['CRAN'] <- 'https://ftp.acc.umu.se/mirror/CRAN/'; options(repos = r);" > ~/.Rprofile && \
-	Rscript -e "install.packages('ggplot2',dependencies=TRUE)" && \
-	Rscript -e "install.packages('plyr',dependencies=TRUE)"
+	Rscript -e "install.packages('ggplot2',dependencies=TRUE,lib='/usr/local/lib64/R/library')" && \
+	Rscript -e "install.packages('plyr',dependencies=TRUE,lib='/usr/local/lib64/R/library')"
 
 %runscript
     exec scif "$@"
