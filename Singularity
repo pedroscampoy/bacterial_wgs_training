@@ -42,6 +42,10 @@ From: centos:latest
     scif install /opt/gethomologues_v3.1.4_centos7.scif && \
     echo "Installing Unicycler app" && \
     scif install /opt/unicycler_v0.4.7_centos7.scif && \
+    echo "Installing Taranis app" && \
+    scif install /opt/taranis_v0.1_centos7.scif && \
+    echo "Installing Download bigsdb api app" && \
+    scif install /opt/downloadbigsdb_v0.1_centos7.scif && \
     echo "Installing plasmidID app" && \
     scif install /opt/plasmidid_v1.4.1_centos7.scif
 
@@ -62,6 +66,7 @@ From: centos:latest
 	# Install core R dependencies
 	echo "r <- getOption('repos'); r['CRAN'] <- 'https://ftp.acc.umu.se/mirror/CRAN/'; options(repos = r);" > ~/.Rprofile && \
 	Rscript -e "install.packages('ggplot2',dependencies=TRUE,lib='/usr/local/lib64/R/library')" && \
+	Rscript -e "install.packages('ape',dependencies=TRUE,lib='/usr/local/lib64/R/library')" && \
 	Rscript -e "install.packages('plyr',dependencies=TRUE,lib='/usr/local/lib64/R/library')"
 
 %runscript

@@ -336,7 +336,7 @@ if(!params.bwa_index && fasta_file){
  */
 if (params.step =~ /(preprocessing|mapping|assembly|outbreakSNP|outbreakMLST|plasmidID|strainCharacterization)/ ){
 	process fastqc {
-		tag "$name"
+		tag "$prefix"
 		publishDir "${params.outdir}/fastqc", mode: 'copy',
 			saveAs: {filename -> filename.indexOf(".zip") > 0 ? "zips/$filename" : "$filename"}
 
@@ -348,13 +348,15 @@ if (params.step =~ /(preprocessing|mapping|assembly|outbreakSNP|outbreakMLST|pla
 		file '.command.out' into fastqc_stdout
 
 		script:
+
+		prefix = name - ~/(_S[0-9]{2})?(_L00[1-9])?(.R1)?(_1)?(_R1)?(_trimmed)?(_val_1)?(_00*)?(\.fq)?(\.fastq)?(\.gz)?$/
 		"""
 		fastqc -t 1 $reads
 		"""
 	}
 
 	process trimming {
-		tag "$name"
+		tag "$prefix"
 		publishDir "${params.outdir}/trimming", mode: 'copy',
 			saveAs: {filename ->
 				if (filename.indexOf("_fastqc") > 0) "FastQC/$filename"
@@ -372,8 +374,9 @@ if (params.step =~ /(preprocessing|mapping|assembly|outbreakSNP|outbreakMLST|pla
 		file '*.log' into trimmomatic_results
 
 		script:
+		prefix = name - ~/(_S[0-9]{2})?(_L00[1-9])?(.R1)?(_1)?(_R1)?(_trimmed)?(_val_1)?(_00*)?(\.fq)?(\.fastq)?(\.gz)?$/
 		"""
-		trimmomatic PE -phred33 $reads $name"_R1_paired.fastq" $name"_R1_unpaired.fastq" $name"_R2_paired.fastq" $name"_R2_unpaired.fastq" ILLUMINACLIP:${params.trimmomatic_adapters_file}:${params.trimmomatic_adapters_parameters} SLIDINGWINDOW:${params.trimmomatic_window_length}:${params.trimmomatic_window_value} MINLEN:${params.trimmomatic_mininum_length} 2>&1 > $name".log"
+		trimmomatic PE -phred33 $reads $prefix"_R1_paired.fastq" $prefix"_R1_unpaired.fastq" $prefix"_R2_paired.fastq" $prefix"_R2_unpaired.fastq" ILLUMINACLIP:${params.trimmomatic_adapters_file}:${params.trimmomatic_adapters_parameters} SLIDINGWINDOW:${params.trimmomatic_window_length}:${params.trimmomatic_window_value} MINLEN:${params.trimmomatic_mininum_length} 2>&1 > $name".log"
 
 		gzip *.fastq
 
