@@ -14,7 +14,7 @@ Open a terminal and type into it. Remember to use TAB to autocomplete and sugges
 
 #### How do I navigate the file system?
 
-Let's remember the basics: `pwd cd ls mkdir mv rm rmdir less nano`. We are going to use those commands to:
+Let's remember the basics: ***pwd cd ls mkdir mv rm rmdir less nano***. We are going to use those commands to:
 
 Check our working directory: `pwd`
 
